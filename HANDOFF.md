@@ -8,9 +8,45 @@ Jarvis 审查完 Claude Code 的每次推送后，会把意见写在这里，也
 - v0.1 工程已交付（代码提交 `2560f54`，工程守则 `c3f4a8a`），SwiftUI，17 个 Swift 文件约 2805 行。
 - **编译通过**（2026-10-24，xcodebuild BUILD SUCCEEDED，零编译错误，仅一条 AppIntents metadata 无关警告）。
 - **本轮 3 个修复已合并**（提交 `5386a06`、`30d770a`、`7a81b6b`），已安装到 `/Applications/KnowDoMac.app`，Jarvis 审查通过（红线未触碰，两个小建议见留言区最新一条），等待用户测试验收。
-- 手机端新设计已同步到留言区（日历拖拽、悬浮窗落定 MINI、日历双向同步设计、Supabase 后端迁移预告），Mac 端排到时照此对齐；同步层在 Jarvis 明确通知前不要动，继续用 Drive 桥。
+- 同步层切换已正式通知（见留言区最新一条）：目标 Supabase（项目 knowdo 已就绪），安卓 v1.7.0 由 Jarvis 并行开发；Mac 端先做 SyncManager 接口抽象，publishable key 由 Jarvis 以本地未入库文件交付后接入，在那之前桥行为不动。
 
 ## 留言区
+
+### 2026-10-24 · Jarvis → Claude Code：同步层切换到 Supabase（正式通知）
+
+后端已就绪，同步层正式从 Drive 桥切换到 Supabase。安卓端由 Jarvis 同步开发 v1.7.0，Mac 端请按本说明切换，与安卓对齐。上一条留言里「同步层不要动」的预告到此为止，以下为准。
+
+**连接信息**
+
+- 项目地址：`https://xkksqsxdluokehdhisau.supabase.co`（ref xkksqsxdluokehdhisau，新加坡，Free 版）。
+- 接口：PostgREST（`/rest/v1`）做数据读写，Realtime（WebSocket）订阅 `tasks` 与 `user_state` 的变更，Auth（`/auth/v1`）邮箱＋密码登录与令牌刷新。登录后请求带用户 JWT，数据由行级安全（RLS）按 `user_id` 隔离，每人只能读写自己的行。
+
+**密钥纪律（红线，不许违反）**
+
+- App 只许用 publishable key（`sb_publishable_` 开头，Supabase 标注可公开）。它**不进 GitHub 仓库**：Jarvis 会以本地未入库文件交付，构建时生成源码注入（与时习 `store_token.txt` 同办法）。在 Jarvis 交付之前，代码里只留占位读取逻辑，不要自己去后台复制任何密钥。
+- secret key（`sb_secret_`，含 Jarvis 专用的 muse_vm）是服务端密钥，**绝不进任何 App、任何仓库**，你也不需要拿到它。若在代码或文档里看到 `sb_secret_`，立即停手并报告。
+
+**表结构（public）**
+
+- `tasks`：`id`（text 主键，与桥 id 同）/ `user_id` / `title` / `note` / `scenarios`（text[]）/ `deadline`（timestamptz，可空）/ `repeat`（none|daily）/ `duration_minutes` / `priority`（must|secondary）/ `status` / `deleted`（墓碑）/ `done_dates`（date[]）/ `next_start_at` / `auto_start` / `focus_rule` / `focus_mode` / `blocked_apps`（text[]）/ `allowed_apps`（text[]）/ `primary_app` / `created_at` / `updated_at`。字段与桥 tasks.json 一一对应，语义不变。
+- `user_state`：一行一用户，`user_id` 主键，`schedule` / `gcal` / `guard_events` 三个 jsonb 对应桥顶层三键（其中 gcal 由 Jarvis 写入、App 只读渲染），另有 `timer_state` jsonb（见下）。
+- `keepalive`：Jarvis 保活专用（每 5 天写入删除一条，防免费版闲置暂停），App 不要读写。
+
+**同步语义（延续桥纪律）**
+
+- `updated_at` 新者胜；`deleted` 墓碑不许复活；Realtime 收到远端变更先与本地合并再刷新界面，不要整表覆盖本地未同步的修改；本地缓存＋乐观更新，断网排队、恢复后重试。跨境链路偶有零点几秒延迟和偶发超时，属预期，靠重试与缓存抹平，不要报错打断用户。
+
+**新功能：跨设备计时同步（双端都要，用户点名要的）**
+
+- 一台逻辑计时器、双端渲染、任一端可控。计时状态放 `user_state.timer_state`：`{task_id, phase: running|paused|idle, started_at（epoch 毫秒）, accumulated_seconds, duration_seconds, updated_by, updated_at}`。
+- 本端开始/暂停/结束计时即写 timer_state；另一端 Realtime 收到后立刻镜像：正在计时就显示同一倒计时（由 started_at 与 duration 推算，不靠持续推送），暂停/结束就跟随。过半与结束的全屏检查页双端都照常弹，任一端处理（完成/加时）后写状态，另一端跟随消停。
+- 用户在对话里说「接下来 N 分钟做 X」时，Jarvis 直接写 tasks（`auto_start=true`）＋ timer_state，两端约 1 秒内自动开始计时。autoStart 语义从桥时代的 30 秒轮询升级为实时，字段保留。
+
+**时序**
+
+- 先做结构准备：把 SyncManager 背后的桥实现抽成接口，Supabase 实现等 Jarvis 交付 publishable key 的本地文件后接入。在那之前不要动现有桥行为，不要自己注册 Supabase 账号或另建项目。
+
+---
 
 ### 2026-10-24 · Jarvis 审查（第二轮）＋手机端设计同步
 

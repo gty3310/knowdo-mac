@@ -44,6 +44,56 @@ final class FloatingPanelController: NSObject {
     private var resizing = false
     private var collapseAfterEditing = false
     private var expandedSink: AnyCancellable?
+    private var snoozeTimer: Timer?
+    static let snoozeUntilKey = "floatingPanelSnoozeUntilMs"
+    static let snoozeTaskKey = "floatingPanelSnoozeTaskId"
+
+    /// 暂时收起悬浮窗：minutes 分钟后自动再现；截止时刻写进 UserDefaults，重启照算。
+    static func snooze(minutes: Int) {
+        UserDefaults.standard.set(Double(nowMs()) + Double(minutes) * 60_000, forKey: snoozeUntilKey)
+        UserDefaults.standard.removeObject(forKey: snoozeTaskKey)
+        NotificationCenter.default.post(name: .knowdoPanelVisibilityChanged, object: nil)
+    }
+
+    /// 等当前任务结束（不再是计时/暂停槽里的任务）再回来。
+    static func snoozeUntilTaskEnds(taskId: String) {
+        UserDefaults.standard.set(taskId, forKey: snoozeTaskKey)
+        UserDefaults.standard.removeObject(forKey: snoozeUntilKey)
+        NotificationCenter.default.post(name: .knowdoPanelVisibilityChanged, object: nil)
+    }
+
+    /// 不再出现（设置里的开关可重新打开）。
+    static func hideForGood() {
+        UserDefaults.standard.set(false, forKey: "showFloatingPanel")
+        clearSnooze()
+    }
+
+    /// 立刻把悬浮窗找回来（清 snooze、打开开关）。
+    static func reveal() {
+        UserDefaults.standard.set(true, forKey: "showFloatingPanel")
+        clearSnooze()
+    }
+
+    private static func clearSnooze() {
+        UserDefaults.standard.removeObject(forKey: snoozeUntilKey)
+        UserDefaults.standard.removeObject(forKey: snoozeTaskKey)
+        NotificationCenter.default.post(name: .knowdoPanelVisibilityChanged, object: nil)
+    }
+
+    private var snoozed: Bool {
+        let d = UserDefaults.standard
+        let until = d.double(forKey: Self.snoozeUntilKey)
+        if until > 0 {
+            if Double(nowMs()) < until { return true }
+            d.removeObject(forKey: Self.snoozeUntilKey)
+        }
+        if let id = d.string(forKey: Self.snoozeTaskKey) {
+            let current = MainActor.assumeIsolated { TimerEngine.shared.currentSlot?.taskId }
+            if current == id { return true }
+            d.removeObject(forKey: Self.snoozeTaskKey)
+        }
+        return false
+    }
 
     func setup() {
         let p = FloatingPanel(contentRect: NSRect(origin: .zero, size: Self.compactSize),
@@ -83,6 +133,10 @@ final class FloatingPanelController: NSObject {
             .sink { [weak self] expanded in self?.resize(expanded: expanded) }
         panel = p
         applyVisibility()
+        // 到点 / 任务结束后自动再现
+        snoozeTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+            self?.applyVisibility()
+        }
     }
 
     // MARK: - 展开 / 收起
@@ -136,10 +190,14 @@ final class FloatingPanelController: NSObject {
     }
 
     func applyVisibility() {
-        let show = UserDefaults.standard.object(forKey: "showFloatingPanel") as? Bool ?? true
-        if show {
-            panel?.orderFront(nil)
-        } else {
+        let enabled = UserDefaults.standard.object(forKey: "showFloatingPanel") as? Bool ?? true
+        if enabled && !snoozed {
+            if panel?.isVisible != true {
+                PanelHoverState.shared.expanded = false
+                panel?.orderFront(nil)
+            }
+        } else if panel?.isVisible == true {
+            PanelHoverState.shared.expanded = false
             panel?.orderOut(nil)
         }
     }

@@ -101,10 +101,14 @@ final class SyncManager: ObservableObject {
     private func connectRealtime() {
         SupabaseRealtime.shared.onRemoteChange = { [weak self] in
             self?.synchronize()
-            Task { @MainActor in await TimerSync.shared.pullAndApply() }
+            Task { @MainActor in
+                await TimerSync.shared.pullAndApply()
+                await IdleNagStore.shared.load()
+            }
         }
         SupabaseRealtime.shared.connect()
         TimerSync.shared.start()
+        Task { @MainActor in await IdleNagStore.shared.load() }
     }
 
     /// 登录/登出后调用，切换后端并重新连接 Realtime。
@@ -115,6 +119,7 @@ final class SyncManager: ObservableObject {
             SupabaseRealtime.shared.disconnect()
             TimerSync.shared.stop()
             clearCache()
+            Task { @MainActor in await IdleNagStore.shared.load() }
             tasks = []
             scheduleRaw = nil
             accountName = "未登录"

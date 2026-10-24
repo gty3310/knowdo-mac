@@ -77,6 +77,8 @@ struct MenuBarMenuView: View {
         Button("打开主窗口") {
             (NSApp.delegate as? AppDelegate)?.showMainWindow()
         }
+        Button("更新日志") { ChangelogController.shared.show() }
+        Button("显示悬浮小窗") { FloatingPanelController.reveal() }
         Button("打开日历") {
             openWindow(id: "calendar")
             NSApp.activate(ignoringOtherApps: true)

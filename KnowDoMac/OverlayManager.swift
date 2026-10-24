@@ -16,6 +16,7 @@ final class OverlayManager {
     private var windows: [OverlayWindow] = []
     private var alarmTimer: Timer? = nil
     var isShowing: Bool { !windows.isEmpty }
+    private(set) var isNextTaskShowing = false
 
     private init() {}
 
@@ -42,10 +43,12 @@ final class OverlayManager {
     /// 任务衔接守卫页「接下来干什么？」。
     func showNextTask() {
         present(NextTaskView())
+        isNextTaskShowing = true
     }
 
     func dismiss() {
         AlarmRing.shared.cancel()
+        isNextTaskShowing = false
         alarmTimer?.invalidate()
         alarmTimer = nil
         for w in windows {

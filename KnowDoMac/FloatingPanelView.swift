@@ -12,6 +12,8 @@ struct FloatingPanelView: View {
     @State private var noteDraft: String = ""
     @State private var saveWork: DispatchWorkItem? = nil
     @State private var copied: Bool = false
+    @State private var choosingClose = false
+    @State private var customSnooze = ""
     @ObservedObject private var hover = PanelHoverState.shared
 
     private var task: TaskItem? { timer.topTask }
@@ -23,7 +25,9 @@ struct FloatingPanelView: View {
                 .fill(Color.black.opacity(expanded ? 0.45 : 0.80))
             RoundedRectangle(cornerRadius: expanded ? 18 : 15, style: .continuous)
                 .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
-            if expanded {
+            if expanded && choosingClose {
+                closeChooser
+            } else if expanded {
                 if let task = task {
                     content(for: task)
                 } else {
@@ -53,11 +57,11 @@ struct FloatingPanelView: View {
                         .lineLimit(1)
                 }
                 Spacer()
-                Button("✕") { collapse() }
+                Button("✕") { choosingClose = true }
                     .buttonStyle(.plain)
                     .font(.system(size: 11))
                     .foregroundColor(.white.opacity(0.6))
-                    .help("收成小胶囊（鼠标再移上来会重新展开）")
+                    .help("先收起悬浮窗…（可选多久后再回来）")
             }
 
             if let bar = pauseBarText(for: task) {
@@ -182,6 +186,53 @@ struct FloatingPanelView: View {
         .padding(.horizontal, 12)
     }
 
+    /// 关闭悬浮窗时的选择：等当前任务结束 / 定时再现 / 不再出现。
+    private var closeChooser: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("先收起悬浮窗，多久后回来？")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.white)
+            if let id = timer.currentSlot?.taskId {
+                Button("等当前任务结束再回来") { closeFor { FloatingPanelController.snoozeUntilTaskEnds(taskId: id) } }
+                    .buttonStyle(PanelButtonStyle())
+            }
+            HStack(spacing: 6) {
+                ForEach([(10, "10 分钟"), (15, "15 分钟"), (30, "30 分钟"), (60, "1 小时")], id: \.0) { m in
+                    Button(m.1) { closeFor { FloatingPanelController.snooze(minutes: m.0) } }
+                        .buttonStyle(PanelButtonStyle())
+                }
+            }
+            HStack(spacing: 6) {
+                TextField("自定义分钟", text: $customSnooze)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 96)
+                Button("确定") {
+                    if let m = Int(customSnooze.trimmingCharacters(in: .whitespaces)), m > 0 {
+                        closeFor { FloatingPanelController.snooze(minutes: m) }
+                    }
+                }
+                .buttonStyle(PanelButtonStyle())
+            }
+            HStack(spacing: 8) {
+                Button("不再出现") { closeFor { FloatingPanelController.hideForGood() } }
+                    .buttonStyle(PanelButtonStyle())
+                Button("取消") { choosingClose = false }
+                    .buttonStyle(PanelButtonStyle())
+            }
+            Text("「不再出现」可在设置或菜单栏里重新打开")
+                .font(.system(size: 10))
+                .foregroundColor(.white.opacity(0.5))
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func closeFor(_ action: () -> Void) {
+        choosingClose = false
+        customSnooze = ""
+        action()
+    }
+
     private var emptyState: some View {
         VStack(spacing: 10) {
             Text("暂无待办任务")
@@ -273,11 +324,6 @@ struct FloatingPanelView: View {
         }
         saveWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: work)
-    }
-
-    /// 只收回小胶囊，不隐藏悬浮窗（隐藏改动设置页的开关，免得点一下就找不回来）。
-    private func collapse() {
-        hover.expanded = false
     }
 
     private func showMainWindow() {

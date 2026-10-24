@@ -34,6 +34,8 @@ struct SettingsView: View {
                         .foregroundColor(.secondary)
                 }
 
+                IdleNagSection()
+
                 Section("悬浮面板") {
                     Toggle("显示桌面悬浮小窗", isOn: $showFloatingPanel)
                         .onChange(of: showFloatingPanel) { _, _ in
@@ -61,8 +63,9 @@ struct SettingsView: View {
 
                 Section("关于") {
                     LabeledContent("版本") {
-                        Text("知行 KnowDo for Mac v0.1")
+                        Text("知行 KnowDo for Mac \(BuildInfo.display)")
                     }
+                    Button("更新日志") { ChangelogController.shared.show() }
                     Text("The Unity of Knowledge and Action · 知行合一")
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)

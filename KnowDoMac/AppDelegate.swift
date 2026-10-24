@@ -8,8 +8,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         GuardNotifier.shared.setup()
         SyncManager.shared.start()
         IdleGuard.shared.start()
+        IdleNagRunner.shared.start()
         panelController.setup()
         registerLoginItemByDefault()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            ChangelogController.shared.showIfNewVersion()
+        }
     }
 
     /// 关掉主窗口不退出 App（菜单栏和悬浮窗继续工作）。

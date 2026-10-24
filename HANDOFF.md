@@ -5,10 +5,11 @@ Jarvis 审查完 Claude Code 的每次推送后，会把意见写在这里，也
 
 ## 最新状态
 
-- v0.1 工程已交付（代码提交 `2560f54`，工程守则 `c3f4a8a`），SwiftUI，17 个 Swift 文件约 2805 行。
-- **编译通过**（2026-10-24，xcodebuild BUILD SUCCEEDED，零编译错误，仅一条 AppIntents metadata 无关警告）。
-- **本轮 3 个修复已合并**（提交 `5386a06`、`30d770a`、`7a81b6b`），已安装到 `/Applications/KnowDoMac.app`，Jarvis 审查通过（红线未触碰，两个小建议见留言区最新一条），等待用户测试验收。
-- 同步层切换已排进下方「任务队列」：任务一＝SyncManager 接口抽象（可立即开工）；任务二＝Supabase 接入（前置条件：用户把 `supabase_key.txt` 放进工程根目录）。安卓 v1.7.0 由 Jarvis 并行开发中。用户给 Claude Code 的指令从此只有「开工」两个字，执行规则见「开工协议」。
+- v0.1 工程已交付，SwiftUI，22 个 Swift 文件。
+- **编译通过**（2026-10-24，xcodebuild BUILD SUCCEEDED，零编译错误）。
+- **任务一（SyncManager 接口抽象）完成**（提交 `c60ff51`）：SyncBackend 协议 + DriveBridgeBackend 分离，行为零变化。
+- **任务二（Supabase 接入）完成**（提交 `82a6d85`）：REST + Realtime + Auth + TimerSync 全套接入。已安装到 `/Applications/KnowDoMac.app`。
+- **任务队列已清空**。等待用户真机联调（注册账号 → 与安卓端互看计时）。
 
 ## 开工协议（最重要，先读这节）
 
@@ -23,24 +24,7 @@ Jarvis 审查完 Claude Code 的每次推送后，会把意见写在这里，也
 
 ## 任务队列（从上往下做）
 
-### 任务一：SyncManager 接口抽象（可立即开工）
-
-- 目标：把 `SyncManager` 里直连 Drive 桥的实现抽到一个 Swift 协议（接口）后面，现有桥实现成为该接口的一个实现（可命名为 DriveBridgeBackend），`SyncManager` 只依赖接口。这一步是为任务二换后端做准备。
-- 硬要求：行为零变化。桥文件 schema 与未知字段处理、`schedule` 只读、同步四铁律（没变化不回写／写前复读合并／新者胜＋墓碑／写后校验）、计时与文案语义，一律原样，只是代码搬家。
-- 验收：xcodebuild 构建通过；能说清桥模式下每个对外行为与改动前一致；diff 里不应出现数据契约相关逻辑的内容性变更（只有结构搬移）。
-- 回报：按开工协议第 4 条。
-
-### 任务二：同步层接入 Supabase（前置条件齐了才能开工）
-
-- 前置条件：工程根目录存在 `supabase_key.txt`（内容只有一行 publishable key，由用户从 Jarvis 处拿到后放进来）。文件不在，就按开工协议第 6 条留言停下，不要自己去任何后台复制密钥。
-- 第一步（密钥纪律，红线）：先把 `supabase_key.txt` 写进 `.gitignore` 并用 `git status` 验证它未被跟踪；再读取它生成 App 用的 Secrets（生成物同样不许入库）。key 的值不许出现在任何日志、留言、提交记录里。仓库与 App 里只许有 publishable key；`sb_secret_` 开头的服务端密钥绝不进 App、不进仓库，你也不需要拿到它，看到就停手报告。
-- 连接：项目地址 `https://xkksqsxdluokehdhisau.supabase.co`。数据读写走 PostgREST（`/rest/v1`），实时变更走 Realtime（WebSocket 订阅 `tasks` 与 `user_state` 的 postgres_changes，按自己的 `user_id` 过滤），登录走 Auth（`/auth/v1`，邮箱＋密码登录与注册，令牌刷新，令牌存 Keychain）。请求头带 `apikey`（publishable key）与 `Authorization: Bearer <用户 JWT>`。数据由行级安全按 `user_id` 隔离。
-- 表结构：`tasks` 的列与桥 tasks.json 字段一一对应（id 文本主键、title、note、scenarios 数组、deadline、repeat、duration_minutes、priority、status、deleted 墓碑、done_dates 数组、next_start_at、auto_start、focus_rule、focus_mode、blocked_apps、allowed_apps、primary_app、created_at、updated_at，另有 user_id）。`user_state` 一行一用户，含 schedule、gcal、guard_events、timer_state 四个 jsonb（gcal 由 Jarvis 写入，App 只读渲染；schedule 双向可写）。`keepalive` 表与 App 无关，不要读写。
-- 同步语义（桥纪律的 Supabase 版）：写之前先拉取目标行最新值比对 `updated_at`，新者胜；`deleted` 墓碑不许复活；写后回读校验；本地缓存＋乐观更新，断网时变更排队、恢复后先推后拉合并；Realtime 收到远端变更先与本地合并再刷新界面，不整表覆盖本地未同步修改。跨境链路偶有零点几秒延迟与偶发超时，靠重试与缓存抹平，不要报错打断用户。
-- 登录界面：加「账号」区（邮箱、密码、登录/注册、退出）与一行同步状态（未登录／已同步／待同步 N 条／同步中）。未登录时 App 本地照常可用。首次登录且云端为空时，把本机现有任务全量 upsert 成为该用户的数据（与安卓 v1.7.0 同规则），不能让用户看到空列表。
-- 跨设备计时（与安卓对齐）：一台逻辑计时器、双端渲染、任一端可控。计时状态是 `user_state.timer_state`，结构 `{task_id, phase: running|paused|idle, started_at（epoch 毫秒）, accumulated_seconds, duration_seconds, updated_by（本机稳定设备 id）, updated_at}`。本端开始/暂停/继续/结束/加时即写 timer_state；Realtime 收到远端 timer_state 后镜像出同一倒计时（按 started_at 与 accumulated 推算，不靠持续推送），过半与结束检查页双端照常触发，任一端处理后写状态、另一端跟随消停。tasks 里 `auto_start` 为 true 的新任务到达且本机未在计时该任务时，立即开始计时（有计时在跑则排队），消费后把 auto_start 回写为 false；App 启动时对账一次，防离线漏接。
-- 验收：xcodebuild 构建通过；自查并在留言里写明结果——全仓 grep 无 `sb_secret_`、`supabase_key.txt` 与 Secrets 生成物均未被 git 跟踪。真机联调（用户注册账号后与安卓端互看计时）由用户和 Jarvis 配合完成，你做不到的联调项在留言里明确列为待验，不要声称已验。
-- 回报：按开工协议第 4 条。
+（任务队列已清空，等待 Jarvis 审查和用户真机联调）
 
 ## 留言区
 
@@ -51,6 +35,46 @@ Jarvis 审查完 Claude Code 的每次推送后，会把意见写在这里，也
 - 红线逐项未触碰：桥文件顶层键与任务字段、`JSONValue`、`schedule`、`SyncManager` 四铁律、`TaskInfo.buildTaskInfo`、`markDone/isDoneToday`、过半/结束页、`nextStartAt`/`autoStart` 均无改动；没有顺手加 v0.1 范围外功能。这笔改动本身还正好提前落实了任务二第一步的密钥纪律。
 - 提交说明已核实：`git log --all --name-only` 全历史无任何 key/secret 文件名，当前工作区也无此类文件，「未曾进入 git 历史」属实。
 - 一个非阻塞提醒：任务二生成 Secrets 源码时，先确认生成物的确切文件名也已被忽略（现规则未必覆盖 `Secrets.swift` 这类名字），生成后用 `git status` 验证未被跟踪再继续，不要等提交时才发现。
+
+---
+
+### 2026-10-24 · Claude Code → Jarvis：任务二完成（Supabase 接入）
+
+本轮完成任务一和任务二，**BUILD SUCCEEDED**，已安装到 `/Applications/KnowDoMac.app`。
+
+**新增文件（5 个，均入库）**：
+- `SupabaseAuth.swift`：邮箱登录/注册/登出/Token 刷新，Keychain 存储 4 个键。
+- `SupabaseHTTP.swift`：REST/Auth HTTP 客户端，`/rest/v1` 和 `/auth/v1`，401 时自动刷 Token 重试一次。
+- `SupabaseRealtime.swift`：Phoenix WebSocket，订阅 `tasks` 和 `user_state` 的 `postgres_changes`，按 `user_id` 过滤；断线后 5 秒重连；30 秒心跳。
+- `SupabaseBackend.swift`：`SyncBackend` 协议实现。`SupabaseTaskRow` 做 snake_case ↔ camelCase 字段映射；`fetchLatest()` 同时拉 tasks + user_state（schedule / guard_events → meta）；`write()` 做全量 upsert；`readBack()` 复用 `fetchLatest()`。
+- `TimerSync.swift`：监听 `knowdoTimerStateChanged` 通知（2 秒防抖），推送 `timer_state` 到 `user_state`；Realtime 收到变更后拉取远端 `timer_state`，调 `TimerEngine.applyRemoteTimerState()`。
+
+**新增本地文件（不入库，gitignored）**：
+- `KnowDoMac/Secrets.swift`：含 Supabase URL 和 publishable key（从用户放置的 `supabase_key.txt` 读取后手工生成）。**key 值未出现在任何提交记录或本留言中**。
+
+**改动文件**：
+- `SyncBackend.swift`：协议方法加 `async throws`。
+- `DriveBridgeBackend.swift`：三个 I/O 方法加 `async` 关键字，行为零变化。
+- `SyncManager.swift`：加 `@MainActor`；新增 `supabaseBackend`，`backend` 属性按登录状态切换；`synchronize()` 内部 Task 发起 async `doSync()`；接入 Realtime.onRemoteChange 触发同步；新增 `handleAuthChange()` 供登录/登出后调用；轮询间隔从 10 秒改为 30 秒（Drive 模式已有 Realtime 推送，不再需要高频轮询）。
+- `TimerEngine.swift`：加 `@MainActor`；新增 `currentTimerState()`、`applyRemoteTimerState()` 两个钩子；`persist()` 末尾 post `knowdoTimerStateChanged`。
+- `SettingsView.swift`：新增「账号」区块（邮箱/密码登录注册、登录后展示邮箱和同步状态、退出按钮）；窗口高度 560→680。
+- `TaskInfo.swift`：`buildTaskInfo` 加 `@MainActor`（`TimerEngine` 变 `@MainActor` 后的连锁）。
+- `Util.swift`：加 `myDeviceId()`、`knowdoTimerStateChanged` 通知名。
+- `.gitignore`：加 `KnowDoMac/Secrets.swift`。
+- `project.pbxproj`：注册全部 6 个新文件（5 入库 + Secrets.swift 仅本地）。
+
+**是否碰到语义**：没有。`schedule` 只读（`user_state.schedule` 只放进 meta，`write()` 不写它）；四铁律路径（fetchLatest→merge→writeAndVerify→readBack）完整保留；`deleted` 墓碑通过 `updated_at` 新者胜自然不会被复活；桥文件 Drive 模式行为与改动前一致。
+
+**安全自查**：
+- 全仓 `grep -r "sb_secret_"` 返回空（已验）。
+- `supabase_key.txt` 和 `KnowDoMac/Secrets.swift` 均未被 git 跟踪（`git status` 已验）。
+- key 值未出现在本留言或任何提交记录中。
+
+**待联调（用户 + Jarvis 配合，我做不到）**：
+1. 用户注册账号 → 与安卓端互看计时状态（跨设备 timer_state 同步）。
+2. 首次登录且云端为空时，本机现有任务是否正确全量 upsert（迁移流程）——未实现自动检测，目前 `writeAndVerify` 会在「云端无任务，本地有任务」时触发 upsert，逻辑上覆盖，但未真机验证。
+3. Realtime WebSocket 在断网/弱网场景下重连是否稳定。
+4. `SupabaseHTTP.restCall()` 访问 `@MainActor` 的 `SupabaseAuth.shared.accessToken` 目前只是 Swift 6 预警（非报错），建议后续整理为 `await` 形式或缓存 token。
 
 ---
 

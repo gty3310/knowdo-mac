@@ -30,6 +30,10 @@ In priority order:
 
 Later: real phone calls for task transitions, monetary fines for going off-plan, an all-day conversational body-doubling companion, and Motion-style automatic rescheduling.
 
+## Latest release
+
+**v0.5.0** (2026-10-24): between-task guard (a full-screen "What's next?" whenever nothing is running), pause mode (every pause needs a purpose and a length, with a timed call-back and a silent option), idle nagging with strictness profiles (shared with the phone through the cloud), a floating-window "come back in…" choice on close, and an in-app changelog. Full history: [CHANGELOG.md](CHANGELOG.md).
+
 ## Features (current)
 
 The design language follows Smart Countdown Timer, a companion app by a friend of the author: task name + countdown always in the menu bar, a dark translucent floating window, and minimal full-screen pages.

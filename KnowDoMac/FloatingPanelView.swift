@@ -60,6 +60,15 @@ struct FloatingPanelView: View {
                     .help("收成小胶囊（鼠标再移上来会重新展开）")
             }
 
+            if let bar = pauseBarText(for: task) {
+                Text(bar)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(Color(red: 1.0, green: 0.78, blue: 0.3))
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(Color.orange.opacity(0.18)))
+            }
+
             // 时间行：左剩余大字，右「已用 / 共计划」
             HStack(alignment: .bottom, spacing: 8) {
                 Text(clockText(remaining(for: task)))
@@ -82,9 +91,16 @@ struct FloatingPanelView: View {
 
             // 按钮行
             HStack(spacing: 8) {
-                Button(startPauseLabel(for: task)) { timer.toggle(taskId: task.id) }
-                Button("完成") { complete(task) }
-                Button("打开知行") { showMainWindow() }
+                if timer.isPaused(task.id), timer.running == nil, timer.paused?.pauseReason != nil {
+                    Button("继续") { timer.resumePaused() }
+                    Button("+5 分钟") { timer.delayResume(minutes: 5) }
+                    Button("换目的") { PauseCardController.shared.show(taskId: task.id) }
+                    Button("完成") { complete(task) }
+                } else {
+                    Button(startPauseLabel(for: task)) { timer.toggle(taskId: task.id) }
+                    Button("完成") { complete(task) }
+                    Button("打开知行") { showMainWindow() }
+                }
                 Spacer()
             }
             .buttonStyle(PanelButtonStyle())
@@ -133,12 +149,18 @@ struct FloatingPanelView: View {
                 Circle()
                     .fill(timer.isRunning(task.id) ? Color.green : Color.white.opacity(0.35))
                     .frame(width: 6, height: 6)
-                Text(task.title)
+                Text(compactTitle(for: task))
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.white.opacity(0.9))
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Spacer(minLength: 4)
+                if let tail = pauseCompactTail(for: task) {
+                    Text(tail)
+                        .font(.system(size: 12, weight: .semibold))
+                        .monospacedDigit()
+                        .foregroundColor(Color(red: 1.0, green: 0.78, blue: 0.3))
+                } else {
                 Text(clockText(usedSeconds(for: task)))
                     .font(.system(size: 13, weight: .semibold, design: .rounded))
                     .monospacedDigit()
@@ -150,6 +172,7 @@ struct FloatingPanelView: View {
                     .font(.system(size: 13, weight: .medium, design: .rounded))
                     .monospacedDigit()
                     .foregroundColor(.white.opacity(0.7))
+                }
             } else {
                 Text("暂无任务")
                     .font(.system(size: 12))
@@ -174,6 +197,33 @@ struct FloatingPanelView: View {
     }
 
     // MARK: - 计算与动作
+
+    /// 暂停带目的时才有：暂停条文案「⏸ 暂停中 · 🚻上厕所 · 还剩 mm:ss」。
+    private func pauseBarText(for task: TaskItem) -> String? {
+        guard timer.running == nil, timer.isPaused(task.id), let p = timer.paused,
+              let reason = p.pauseReason else { return nil }
+        var s = "⏸ 暂停中 · \(p.pauseEmoji ?? "")\(reason)"
+        if let r = timer.pauseRemainingSeconds() { s += " · 还剩 \(clockText(r))" }
+        if p.pauseSilent == true { s += " · 🔕" }
+        return s
+    }
+
+    /// 小胶囊第一行：暂停带目的时报「暂停『任务名』」，否则就是任务名。
+    private func compactTitle(for task: TaskItem) -> String {
+        if timer.running == nil, timer.isPaused(task.id), timer.paused?.pauseReason != nil {
+            return "⏸ 暂停「\(task.title)」"
+        }
+        return task.title
+    }
+
+    /// 小胶囊右侧：暂停带目的时换成「目的 emoji＋目的名＋还剩」。
+    private func pauseCompactTail(for task: TaskItem) -> String? {
+        guard timer.running == nil, timer.isPaused(task.id), let p = timer.paused,
+              let reason = p.pauseReason else { return nil }
+        var s = "\(p.pauseEmoji ?? "")\(reason)"
+        if let r = timer.pauseRemainingSeconds() { s += " \(clockText(r))" }
+        return s
+    }
 
     private func subtitle(for task: TaskItem) -> String {
         if timer.isRunning(task.id) { return "计时中" }

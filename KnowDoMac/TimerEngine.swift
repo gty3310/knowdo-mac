@@ -7,6 +7,18 @@ struct TimerSlot: Codable, Equatable {
     var plannedSeconds: Int
     var accumulatedSeconds: Int
     var halfFired: Bool
+    // ---- 暂停槽元数据（任务四：暂停带目的与到点叫回；旧数据缺省为 nil）----
+    var resumeAtMs: Int64? = nil      // 到点叫回的时刻；nil＝没设（远端镜像暂停、过半/到时/重启遗留）
+    var pauseReason: String? = nil    // 目的显示名（与安卓同口径）
+    var pauseEmoji: String? = nil
+    var pauseSilent: Bool? = nil      // 静音：到点只发系统通知
+    var resumeFired: Bool? = nil      // 到点叫回已发出
+    var remote: Bool? = nil           // 暂停态由另一台设备镜像而来
+
+    mutating func clearPauseMeta() {
+        resumeAtMs = nil; pauseReason = nil; pauseEmoji = nil
+        pauseSilent = nil; resumeFired = nil; remote = nil
+    }
 }
 
 /// 远端 user_state.timer_state 的解析结果。
@@ -18,6 +30,9 @@ struct RemoteTimerState {
     var duration: Int          // 秒
     var updatedBy: String
     var updatedAt: Int64
+    var pauseReason: String? = nil
+    var pauseEmoji: String? = nil
+    var pauseSilent: Bool = false
 }
 
 /// 计时引擎：全局最多一个计时中 + 一个暂停槽（与安卓 TimerState 语义一致）。
@@ -36,6 +51,8 @@ final class TimerEngine: ObservableObject {
     private var ticker: Timer? = nil
     private var remindedStarts: Set<String> = []
     private let slotsKey = "timerSlots.v1"
+    private var silentNextNudgeMs: Int64 = 0
+    private var nudgePosted = false
 
     var currentSlot: TimerSlot? { running ?? paused }
     var currentTask: TaskItem? {
@@ -107,7 +124,9 @@ final class TimerEngine: ObservableObject {
         } else {
             paused = nil
         }
-        running = p
+        var q = p
+        q.clearPauseMeta()
+        running = q
         segmentStart = Date()
         let title = SyncManager.shared.task(id: p.taskId)?.title ?? ""
         SessionStore.shared.open(taskId: p.taskId, title: title)
@@ -115,10 +134,44 @@ final class TimerEngine: ObservableObject {
         persist()
     }
 
+    /// 带目的与时长的暂停（暂停卡确认后调用）：任务在跑就先暂停；已在暂停槽（过半页/换目的）则只改元数据。
+    func pauseWithPurpose(taskId: String, minutes: Int, reason: String, emoji: String, silent: Bool) {
+        if running?.taskId == taskId { pause() }
+        guard var p = paused, p.taskId == taskId, minutes > 0 else { return }
+        p.resumeAtMs = nowMs() + Int64(minutes) * 60_000
+        p.pauseReason = reason
+        p.pauseEmoji = emoji
+        p.pauseSilent = silent
+        p.resumeFired = false
+        p.remote = false
+        paused = p
+        silentNextNudgeMs = 0
+        refreshNumbers()
+        persist()
+    }
+
+    /// 暂停中再歇一会儿：按新时长重设叫回，目的不变。
+    func delayResume(minutes: Int) {
+        guard var p = paused, minutes > 0 else { return }
+        p.resumeAtMs = nowMs() + Int64(minutes) * 60_000
+        p.resumeFired = false
+        p.remote = false
+        paused = p
+        silentNextNudgeMs = 0
+        persist()
+    }
+
+    /// 暂停剩余秒数（距叫回）；没设叫回时间返回 nil。
+    func pauseRemainingSeconds(now: Int64 = nowMs()) -> Int? {
+        guard let ra = paused?.resumeAtMs, ra > 0 else { return nil }
+        return max(0, Int((ra - now + 999) / 1000))
+    }
+
     /// 行内 ▶/⏸ 与悬浮窗、菜单栏共用的开关。
     func toggle(taskId: String) {
         if running?.taskId == taskId {
-            pause()
+            // 暂停必带时长与目的：统一弹暂停卡，不再有无限期暂停
+            PauseCardController.shared.show(taskId: taskId)
         } else if paused?.taskId == taskId {
             resumePaused()
         } else {
@@ -153,6 +206,7 @@ final class TimerEngine: ObservableObject {
         SyncManager.shared.mutate(id: taskId) { $0.markDone() }
         refreshNumbers()
         persist()
+        IdleGuard.shared.fireSoon(after: 1.0)
     }
 
     func completeCurrent() {
@@ -168,6 +222,7 @@ final class TimerEngine: ObservableObject {
             running = r
         } else if var p = paused {
             p.plannedSeconds += minutes * 60
+            p.clearPauseMeta()
             paused = nil
             running = p
             segmentStart = Date()
@@ -199,6 +254,61 @@ final class TimerEngine: ObservableObject {
         checkHalf()
         checkEnd()
         checkStartReminders()
+        checkResumeCall()
+    }
+
+    /// 暂停到点叫回：普通模式弹全屏叫回页（一声提示＋60 秒无反馈起渐强闹铃）；
+    /// 静音模式只发系统通知，无反馈每 5 分钟再发一次，直到用户处理。
+    private func checkResumeCall() {
+        guard var p = paused, let ra = p.resumeAtMs, ra > 0 else {
+            clearNudgeIfNeeded()
+            return
+        }
+        let now = nowMs()
+        let silent = p.pauseSilent == true
+        if p.resumeFired != true {
+            guard now >= ra else { return }
+            if !silent, OverlayManager.shared.isShowing { return }   // 别的全屏页在显，等它处理完
+            p.resumeFired = true
+            paused = p
+            persist(notify: false)
+            if silent {
+                postSilentNudge(p)
+                silentNextNudgeMs = now + 300_000
+            } else if let task = SyncManager.shared.task(id: p.taskId) {
+                OverlayManager.shared.showResumeCall(task: task, slot: p)
+            }
+        } else if silent {
+            if silentNextNudgeMs == 0 {
+                silentNextNudgeMs = now + 300_000      // 重启后接着循环
+            } else if now >= silentNextNudgeMs {
+                postSilentNudge(p)
+                silentNextNudgeMs = now + 300_000
+            }
+        }
+    }
+
+    private func postSilentNudge(_ p: TimerSlot) {
+        let title = SyncManager.shared.task(id: p.taskId)?.title ?? ""
+        GuardNotifier.shared.post(
+            id: "knowdo.resume",
+            title: "\(p.pauseEmoji ?? "⏸") 暂停时间到了",
+            body: "回来继续「\(title)」，或换下一个任务")
+        nudgePosted = true
+    }
+
+    private func clearNudgeIfNeeded() {
+        silentNextNudgeMs = 0
+        if nudgePosted {
+            GuardNotifier.shared.remove(id: "knowdo.resume")
+            nudgePosted = false
+        }
+    }
+
+    /// 点开静音通知后：把叫回页弹出来处理。
+    func showResumeCallNow() {
+        guard let p = paused, let task = SyncManager.shared.task(id: p.taskId) else { return }
+        OverlayManager.shared.showResumeCall(task: task, slot: p)
     }
 
     private func liveElapsed(of slot: TimerSlot) -> Int {
@@ -319,6 +429,10 @@ final class TimerEngine: ObservableObject {
             o["phase"] = "paused"
             o["accumulated_seconds"] = p.accumulatedSeconds
             o["duration_seconds"] = p.plannedSeconds
+            // 暂停目的三件套（安卓 v1.11.0 口径，老端忽略未知字段）
+            if let r = p.pauseReason { o["pause_reason"] = r }
+            if let e = p.pauseEmoji, !e.isEmpty { o["pause_emoji"] = e }
+            if p.pauseSilent == true { o["pause_silent"] = true }
         }
         o["updated_by"] = myDeviceId()
         o["updated_at"] = nowMs()
@@ -385,14 +499,20 @@ final class TimerEngine: ObservableObject {
 
     private func mirrorPaused(_ st: RemoteTimerState, accumulated: Int) -> Bool {
         if running == nil, let p = paused, p.taskId == st.taskId,
-           p.plannedSeconds == st.duration, abs(p.accumulatedSeconds - accumulated) < 2 {
+           p.plannedSeconds == st.duration, abs(p.accumulatedSeconds - accumulated) < 2,
+           p.pauseReason == st.pauseReason, (p.pauseSilent ?? false) == st.pauseSilent {
             return false
         }
         if running != nil { SessionStore.shared.close() }
         running = nil
         segmentStart = nil
-        paused = TimerSlot(taskId: st.taskId, plannedSeconds: st.duration,
-                           accumulatedSeconds: accumulated, halfFired: accumulated * 2 >= st.duration)
+        var slot = TimerSlot(taskId: st.taskId, plannedSeconds: st.duration,
+                             accumulatedSeconds: accumulated, halfFired: accumulated * 2 >= st.duration)
+        slot.pauseReason = st.pauseReason
+        slot.pauseEmoji = st.pauseEmoji
+        slot.pauseSilent = st.pauseSilent ? true : nil
+        slot.remote = true      // 叫回由发起暂停的那台设备负责，本机只显示
+        paused = slot
         return true
     }
 
@@ -413,6 +533,10 @@ final class TimerEngine: ObservableObject {
         guard let data = UserDefaults.standard.data(forKey: slotsKey),
               let p = try? JSONDecoder().decode(Persisted.self, from: data) else { return }
         paused = p.paused
+        if var q = paused, q.pauseSilent != true, q.resumeAtMs != nil {
+            q.resumeFired = false       // 重启前没处理完的叫回页，到点（或已过点）再弹一次
+            paused = q
+        }
         if var r = p.running {
             // 退出期间不计时：流逝时间计入 accumulated（封顶到计划时长），恢复为暂停
             if p.segmentStartMs > 0 {

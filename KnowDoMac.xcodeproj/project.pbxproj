@@ -32,6 +32,8 @@
 		B10000000000000000000017 /* SupabaseRealtime.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000017 /* SupabaseRealtime.swift */; };
 		B10000000000000000000018 /* SupabaseBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000018 /* SupabaseBackend.swift */; };
 		B10000000000000000000019 /* TimerSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000019 /* TimerSync.swift */; };
+		B20000003EDD0204A97736B3 /* Guards.swift in Sources */ = {isa = PBXBuildFile; fileRef = F20000003EDD0204A97736B3 /* Guards.swift */; };
+		B2000000735455F4402E397C /* PauseUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2000000735455F4402E397C /* PauseUI.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -61,6 +63,8 @@
 		F10000000000000000000018 /* SupabaseBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseBackend.swift; sourceTree = "<group>"; };
 		F10000000000000000000019 /* TimerSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerSync.swift; sourceTree = "<group>"; };
 		F10000000000000000000020 /* KnowDoMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KnowDoMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F20000003EDD0204A97736B3 /* Guards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Guards.swift; sourceTree = "<group>"; };
+		F2000000735455F4402E397C /* PauseUI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PauseUI.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -110,6 +114,8 @@
 				F10000000000000000000017 /* SupabaseRealtime.swift */,
 				F10000000000000000000018 /* SupabaseBackend.swift */,
 				F10000000000000000000019 /* TimerSync.swift */,
+				F2000000735455F4402E397C /* PauseUI.swift */,
+				F20000003EDD0204A97736B3 /* Guards.swift */,
 			);
 			path = KnowDoMac;
 			sourceTree = "<group>";
@@ -215,6 +221,8 @@
 				B10000000000000000000017 /* SupabaseRealtime.swift in Sources */,
 				B10000000000000000000018 /* SupabaseBackend.swift in Sources */,
 				B10000000000000000000019 /* TimerSync.swift in Sources */,
+				B2000000735455F4402E397C /* PauseUI.swift in Sources */,
+				B20000003EDD0204A97736B3 /* Guards.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

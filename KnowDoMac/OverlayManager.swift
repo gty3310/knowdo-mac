@@ -32,7 +32,20 @@ final class OverlayManager {
         present(StartRemindView(task: task))
     }
 
+    /// 暂停到点叫回页：一声提示；60 秒内用户没任何反馈 → 起 60 秒渐强闹铃，任何按钮立即停铃。
+    func showResumeCall(task: TaskItem, slot: TimerSlot) {
+        present(ResumeCallView(task: task, emoji: slot.pauseEmoji ?? "⏸", reason: slot.pauseReason))
+        if let s = NSSound(named: "Glass") { s.stop(); s.play() }
+        AlarmRing.shared.arm(after: 60, duration: 60)
+    }
+
+    /// 任务衔接守卫页「接下来干什么？」。
+    func showNextTask() {
+        present(NextTaskView())
+    }
+
     func dismiss() {
+        AlarmRing.shared.cancel()
         alarmTimer?.invalidate()
         alarmTimer = nil
         for w in windows {

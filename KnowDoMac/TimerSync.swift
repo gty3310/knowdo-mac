@@ -80,7 +80,10 @@ final class TimerSync {
             accumulated: Int(int64("accumulated_seconds")),
             duration: Int(int64("duration_seconds")),
             updatedBy: o["updated_by"]?.stringValue ?? "",
-            updatedAt: int64("updated_at"))
+            updatedAt: int64("updated_at"),
+            pauseReason: o["pause_reason"]?.stringValue,
+            pauseEmoji: o["pause_emoji"]?.stringValue,
+            pauseSilent: { if case .bool(let b)? = o["pause_silent"] { return b }; return false }())
         TimerEngine.shared.applyRemoteTimerState(st)
     }
 }

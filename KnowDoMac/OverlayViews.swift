@@ -24,7 +24,9 @@ struct HalfCheckView: View {
                 .padding(.bottom, 10)
             HStack(spacing: 14) {
                 Button("暂停休息") {
+                    // 暂停必带目的与时长：关页后弹暂停卡（任务已在暂停槽，确认后补上叫回）
                     OverlayManager.shared.dismiss()
+                    PauseCardController.shared.show(taskId: task.id)
                 }
                 .buttonStyle(OverlayButtonStyle())
                 .keyboardShortcut(.escape, modifiers: [])
@@ -159,5 +161,206 @@ struct StartRemindView: View {
                 .keyboardShortcut(.return, modifiers: [])
             }
         }
+    }
+}
+
+/// 暂停到点叫回页：继续 / 再歇 5 分钟 / 换下一个任务（暂停槽保留，原任务随时可继续）。
+struct ResumeCallView: View {
+    let task: TaskItem
+    let emoji: String
+    let reason: String?
+
+    var body: some View {
+        OverlayScaffold {
+            Text(emoji)
+                .font(.system(size: 52))
+            Text("该回来啦")
+                .font(.system(size: 32, weight: .bold))
+                .foregroundColor(.white)
+            if let r = reason {
+                Text("「\(r)」的时间到了")
+                    .font(.system(size: 15))
+                    .foregroundColor(.white.opacity(0.65))
+            }
+            Text("继续「\(task.title)」吧")
+                .font(.system(size: 18))
+                .foregroundColor(.white.opacity(0.85))
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 560)
+                .padding(.bottom, 10)
+            HStack(spacing: 14) {
+                Button("换下一个任务") {
+                    OverlayManager.shared.dismiss()
+                    OverlayManager.shared.showNextTask()
+                }
+                .buttonStyle(OverlayButtonStyle())
+
+                Button("再歇 5 分钟") {
+                    TimerEngine.shared.delayResume(minutes: 5)
+                    OverlayManager.shared.dismiss()
+                }
+                .buttonStyle(OverlayButtonStyle())
+
+                Button("继续任务") {
+                    TimerEngine.shared.resumePaused()
+                    OverlayManager.shared.dismiss()
+                }
+                .buttonStyle(OverlayButtonStyle(primary: true))
+                .keyboardShortcut(.return, modifiers: [])
+            }
+        }
+    }
+}
+
+/// 任务衔接守卫页：永远不留「没状态的空档」。填下一个任务（或「休息」）并开始，或直接开今天未完成的一条。
+struct NextTaskView: View {
+    @ObservedObject private var sync = SyncManager.shared
+    @State private var name = ""
+    @State private var days = 0
+    @State private var hours = 0
+    @State private var mins = 0
+    @FocusState private var nameFocused: Bool
+
+    private let quick = [2, 3, 5, 10, 15, 20, 30]
+    private var total: Int { days * 1440 + hours * 60 + mins }
+    private var trimmed: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var canStart: Bool { !trimmed.isEmpty && total > 0 }
+
+    private var todayTasks: [TaskItem] {
+        Array(visibleSorted(sync.tasks.filter { !$0.deleted && !$0.isDoneToday() && $0.isTodayTask }).prefix(10))
+    }
+
+    var body: some View {
+        OverlayScaffold {
+            Text("接下来干什么？")
+                .font(.system(size: 32, weight: .bold))
+                .foregroundColor(.white)
+
+            HStack(spacing: 10) {
+                TextField("任务名称", text: $name)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 16))
+                    .frame(width: 320)
+                    .focused($nameFocused)
+                    .onSubmit { if canStart { start() } }
+                Button("休息") { name = "休息" }
+                    .buttonStyle(OverlayButtonStyle())
+            }
+
+            HStack(spacing: 8) {
+                ForEach(quick, id: \.self) { m in
+                    Button("\(m)") { setMinutes(m) }
+                        .buttonStyle(ChipStyle(on: total == m))
+                }
+                Text("分钟").font(.system(size: 12)).foregroundColor(.white.opacity(0.5))
+            }
+
+            HStack(spacing: 18) {
+                stepper("天", $days)
+                stepper("小时", $hours)
+                stepper("分钟", $mins)
+            }
+
+            Text(summary)
+                .font(.system(size: 13))
+                .foregroundColor(.white.opacity(0.6))
+
+            Button("开始") { start() }
+                .buttonStyle(OverlayButtonStyle(primary: true))
+                .disabled(!canStart)
+                .opacity(canStart ? 1 : 0.4)
+
+            if !todayTasks.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("今日未完成")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.5))
+                    ForEach(todayTasks) { t in
+                        Button {
+                            TimerEngine.shared.start(taskId: t.id)
+                            OverlayManager.shared.dismiss()
+                        } label: {
+                            HStack {
+                                Text((t.priority == "must" ? "★ " : "") + t.title)
+                                    .lineLimit(1)
+                                Spacer()
+                                Text("\(t.durationMinutes) 分钟")
+                                    .foregroundColor(.white.opacity(0.55))
+                            }
+                            .font(.system(size: 13))
+                            .foregroundColor(.white.opacity(0.9))
+                            .padding(.horizontal, 12).padding(.vertical, 6)
+                            .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.09)))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .frame(width: 420)
+                .padding(.top, 6)
+            }
+
+            Button("稍后再说") {
+                IdleGuard.shared.snoozeOnDismiss()
+                OverlayManager.shared.dismiss()
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 12))
+            .foregroundColor(.white.opacity(0.4))
+            .keyboardShortcut(.escape, modifiers: [])
+        }
+        .onAppear { nameFocused = true }
+    }
+
+    private func stepper(_ label: String, _ value: Binding<Int>) -> some View {
+        HStack(spacing: 4) {
+            Text("\(value.wrappedValue)")
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundColor(.white)
+                .frame(minWidth: 28, alignment: .trailing)
+            Text(label).font(.system(size: 12)).foregroundColor(.white.opacity(0.6))
+            Stepper("", value: value, in: 0...100).labelsHidden()
+        }
+    }
+
+    private func setMinutes(_ m: Int) {
+        days = 0; hours = m / 60; mins = m % 60
+    }
+
+    private var summary: String {
+        guard total > 0 else { return "选个时长" }
+        let end = Date().addingTimeInterval(Double(total) * 60)
+        let cal = Calendar.current
+        let endText: String
+        if cal.isDateInToday(end) {
+            endText = timeFormatter.string(from: end)
+        } else {
+            let f = DateFormatter(); f.dateFormat = "M月d日 HH:mm"
+            endText = f.string(from: end)
+        }
+        return "合计 \(total) 分钟 · 到 \(endText) 结束"
+    }
+
+    /// 新建普通任务（priority 留空）并立即开始计时。
+    private func start() {
+        guard canStart else { return }
+        var t = TaskItem.createNew(title: trimmed)
+        t.durationMinutes = total
+        SyncManager.shared.upsert(t)
+        TimerEngine.shared.start(taskId: t.id)
+        OverlayManager.shared.dismiss()
+    }
+}
+
+struct ChipStyle: ButtonStyle {
+    var on: Bool
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 13, weight: .medium))
+            .frame(minWidth: 30)
+            .padding(.horizontal, 10).padding(.vertical, 6)
+            .background(RoundedRectangle(cornerRadius: 8)
+                .fill(Color.white.opacity(on ? 0.85 : (configuration.isPressed ? 0.3 : 0.14))))
+            .foregroundColor(on ? Color(white: 0.12) : .white)
     }
 }

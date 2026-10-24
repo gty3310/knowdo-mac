@@ -261,3 +261,19 @@ func parseSchedule(_ raw: JSONValue?, date: String) -> [PlanBlock]? {
     out.sort { $0.startMin != $1.startMin ? $0.startMin < $1.startMin : $0.endMin < $1.endMin }
     return out
 }
+
+/// 与安卓 TaskStore.visibleSorted 同口径：未完成在前、必要在前、deadline 近在前
+/// （每日重复按今天算，没日期的排后），最后按创建时间。主列表与「接下来干什么」页共用。
+func visibleSorted(_ tasks: [TaskItem]) -> [TaskItem] {
+    func effDate(_ t: TaskItem) -> String? { t.isDaily ? todayString() : t.deadline }
+    return tasks.sorted { a, b in
+        let da = a.isDoneToday(), db = b.isDoneToday()
+        if da != db { return !da }
+        let pa = a.priority == "must", pb = b.priority == "must"
+        if pa != pb { return pa }
+        let ea = effDate(a), eb = effDate(b)
+        if (ea == nil) != (eb == nil) { return ea != nil }
+        if let ea, let eb, ea != eb { return ea < eb }
+        return a.createdAtMs < b.createdAtMs
+    }
+}

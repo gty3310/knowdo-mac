@@ -5,7 +5,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let panelController = FloatingPanelController()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        GuardNotifier.shared.setup()
         SyncManager.shared.start()
+        IdleGuard.shared.start()
         panelController.setup()
         registerLoginItemByDefault()
     }

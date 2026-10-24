@@ -33,8 +33,13 @@ struct MenuBarLabelView: View {
         HStack(spacing: 4) {
             Image(systemName: "cup.and.saucer.fill")
             if let t = timer.topTask {
-                Text("\(t.title) \(clockText(displaySeconds(for: t)))")
-                    .lineLimit(1)
+                if timer.running == nil, timer.isPaused(t.id), let p = timer.paused, let r = p.pauseReason {
+                    Text("⏸ \(p.pauseEmoji ?? "")\(r) \(clockText(timer.pauseRemainingSeconds() ?? 0))")
+                        .lineLimit(1)
+                } else {
+                    Text("\(t.title) \(clockText(displaySeconds(for: t)))")
+                        .lineLimit(1)
+                }
             } else {
                 Text("知行")
             }
@@ -55,9 +60,17 @@ struct MenuBarMenuView: View {
 
     var body: some View {
         if let t = timer.topTask {
-            Text("\(t.title) · 剩 \(clockText(displaySeconds(for: t)))")
-            Button(timer.isRunning(t.id) ? "暂停" : (timer.isPaused(t.id) ? "继续" : "开始")) {
-                timer.toggle(taskId: t.id)
+            if timer.running == nil, timer.isPaused(t.id), let p = timer.paused, let r = p.pauseReason {
+                Text("暂停「\(t.title)」")
+                Text("\(p.pauseEmoji ?? "")\(r) · 还剩 \(clockText(timer.pauseRemainingSeconds() ?? 0))")
+                Button("继续") { timer.resumePaused() }
+                Button("再加 5 分钟") { timer.delayResume(minutes: 5) }
+                Button("换个目的…") { PauseCardController.shared.show(taskId: t.id) }
+            } else {
+                Text("\(t.title) · 剩 \(clockText(displaySeconds(for: t)))")
+                Button(timer.isRunning(t.id) ? "暂停…" : (timer.isPaused(t.id) ? "继续" : "开始")) {
+                    timer.toggle(taskId: t.id)
+                }
             }
             Divider()
         }

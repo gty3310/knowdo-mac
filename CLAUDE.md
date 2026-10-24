@@ -1,11 +1,13 @@
 # 知行 KnowDo for Mac — Claude Code 开工须知
 
-这是知行 KnowDo 的 Mac 客户端（SwiftUI），与安卓版共用同一个 Google Drive 桥文件 `tasks.json` 同步数据。用户（Ti）让你在本机负责把工程编译跑通并迭代，Jarvis（用户的另一个 AI 助手）负责守数据契约和审查改动。
+这是知行 KnowDo 的 Mac 客户端（SwiftUI），当前与安卓版共用同一个 Google Drive 桥文件 `tasks.json` 同步数据，正在按 HANDOFF.md 的任务队列切换到 Supabase。用户（Ti）让你在本机负责把工程编译跑通并迭代，Jarvis（用户的另一个 AI 助手）负责守数据契约和审查改动。
 
 ## 每次开工前必读（顺序不能变）
 
 1. `AGENT_BRIEF.md` —— 工程守则/契约，优先级最高，与你的判断冲突时以它为准；
-2. `HANDOFF.md` —— 交接留言板，看「最新状态」和 Jarvis 的最新留言，那里有本轮的具体任务。
+2. `HANDOFF.md` —— 交接留言板与任务队列都在这里，看「最新状态」「开工协议」和「任务队列」。
+
+用户的指令通常非常短，往往只有「开工」两个字。收到后不要反问：先 `git pull` 到最新，然后按 HANDOFF.md「开工协议」的顺序自动执行任务队列，做完一项接着下一项，直到队列清空或被前置条件挡住为止。
 
 ## 最要命的几条（细则在 AGENT_BRIEF.md）
 

@@ -8,7 +8,39 @@ Jarvis 审查完 Claude Code 的每次推送后，会把意见写在这里，也
 - v0.1 工程已交付（代码提交 `2560f54`，工程守则 `c3f4a8a`），SwiftUI，17 个 Swift 文件约 2805 行。
 - **编译通过**（2026-10-24，xcodebuild BUILD SUCCEEDED，零编译错误，仅一条 AppIntents metadata 无关警告）。
 - **本轮 3 个修复已合并**（提交 `5386a06`、`30d770a`、`7a81b6b`），已安装到 `/Applications/KnowDoMac.app`，Jarvis 审查通过（红线未触碰，两个小建议见留言区最新一条），等待用户测试验收。
-- 同步层切换已正式通知（见留言区最新一条）：目标 Supabase（项目 knowdo 已就绪），安卓 v1.7.0 由 Jarvis 并行开发；Mac 端先做 SyncManager 接口抽象，publishable key 由 Jarvis 以本地未入库文件交付后接入，在那之前桥行为不动。
+- 同步层切换已排进下方「任务队列」：任务一＝SyncManager 接口抽象（可立即开工）；任务二＝Supabase 接入（前置条件：用户把 `supabase_key.txt` 放进工程根目录）。安卓 v1.7.0 由 Jarvis 并行开发中。用户给 Claude Code 的指令从此只有「开工」两个字，执行规则见「开工协议」。
+
+## 开工协议（最重要，先读这节）
+
+用户对 Claude Code 的指令会非常短，通常只有「开工」两个字。收到后不要反问，按下面顺序自动执行：
+
+1. `git pull` 到最新 main。
+2. 依次读 `CLAUDE.md`、`AGENT_BRIEF.md`、本文件的「最新状态」和下方「任务队列」。
+3. 从任务队列里排第一的任务开始做，一项做完接着下一项，直到队列清空、或遇到任务里标了「需要决策」的点、或缺前置条件才停。
+4. 每完成一项：在本文件留言区顶部追加一段（做了什么、改了哪些文件、有没有碰语义、自查结果），更新「最新状态」，把任务队列里完成的任务删掉或标完成，然后 commit 并 push。提交信息用中文说清做了什么。
+5. 红线随时有效：数据契约与语义红线以 `AGENT_BRIEF.md` 为准；拿不准会不会碰红线时，停下，在留言区写明问题再 push，不要猜。
+6. 缺前置条件时不要干等：在留言区写明缺什么、用户需要做的动作（一句话能说清的那种），push 后停下。
+
+## 任务队列（从上往下做）
+
+### 任务一：SyncManager 接口抽象（可立即开工）
+
+- 目标：把 `SyncManager` 里直连 Drive 桥的实现抽到一个 Swift 协议（接口）后面，现有桥实现成为该接口的一个实现（可命名为 DriveBridgeBackend），`SyncManager` 只依赖接口。这一步是为任务二换后端做准备。
+- 硬要求：行为零变化。桥文件 schema 与未知字段处理、`schedule` 只读、同步四铁律（没变化不回写／写前复读合并／新者胜＋墓碑／写后校验）、计时与文案语义，一律原样，只是代码搬家。
+- 验收：xcodebuild 构建通过；能说清桥模式下每个对外行为与改动前一致；diff 里不应出现数据契约相关逻辑的内容性变更（只有结构搬移）。
+- 回报：按开工协议第 4 条。
+
+### 任务二：同步层接入 Supabase（前置条件齐了才能开工）
+
+- 前置条件：工程根目录存在 `supabase_key.txt`（内容只有一行 publishable key，由用户从 Jarvis 处拿到后放进来）。文件不在，就按开工协议第 6 条留言停下，不要自己去任何后台复制密钥。
+- 第一步（密钥纪律，红线）：先把 `supabase_key.txt` 写进 `.gitignore` 并用 `git status` 验证它未被跟踪；再读取它生成 App 用的 Secrets（生成物同样不许入库）。key 的值不许出现在任何日志、留言、提交记录里。仓库与 App 里只许有 publishable key；`sb_secret_` 开头的服务端密钥绝不进 App、不进仓库，你也不需要拿到它，看到就停手报告。
+- 连接：项目地址 `https://xkksqsxdluokehdhisau.supabase.co`。数据读写走 PostgREST（`/rest/v1`），实时变更走 Realtime（WebSocket 订阅 `tasks` 与 `user_state` 的 postgres_changes，按自己的 `user_id` 过滤），登录走 Auth（`/auth/v1`，邮箱＋密码登录与注册，令牌刷新，令牌存 Keychain）。请求头带 `apikey`（publishable key）与 `Authorization: Bearer <用户 JWT>`。数据由行级安全按 `user_id` 隔离。
+- 表结构：`tasks` 的列与桥 tasks.json 字段一一对应（id 文本主键、title、note、scenarios 数组、deadline、repeat、duration_minutes、priority、status、deleted 墓碑、done_dates 数组、next_start_at、auto_start、focus_rule、focus_mode、blocked_apps、allowed_apps、primary_app、created_at、updated_at，另有 user_id）。`user_state` 一行一用户，含 schedule、gcal、guard_events、timer_state 四个 jsonb（gcal 由 Jarvis 写入，App 只读渲染；schedule 双向可写）。`keepalive` 表与 App 无关，不要读写。
+- 同步语义（桥纪律的 Supabase 版）：写之前先拉取目标行最新值比对 `updated_at`，新者胜；`deleted` 墓碑不许复活；写后回读校验；本地缓存＋乐观更新，断网时变更排队、恢复后先推后拉合并；Realtime 收到远端变更先与本地合并再刷新界面，不整表覆盖本地未同步修改。跨境链路偶有零点几秒延迟与偶发超时，靠重试与缓存抹平，不要报错打断用户。
+- 登录界面：加「账号」区（邮箱、密码、登录/注册、退出）与一行同步状态（未登录／已同步／待同步 N 条／同步中）。未登录时 App 本地照常可用。首次登录且云端为空时，把本机现有任务全量 upsert 成为该用户的数据（与安卓 v1.7.0 同规则），不能让用户看到空列表。
+- 跨设备计时（与安卓对齐）：一台逻辑计时器、双端渲染、任一端可控。计时状态是 `user_state.timer_state`，结构 `{task_id, phase: running|paused|idle, started_at（epoch 毫秒）, accumulated_seconds, duration_seconds, updated_by（本机稳定设备 id）, updated_at}`。本端开始/暂停/继续/结束/加时即写 timer_state；Realtime 收到远端 timer_state 后镜像出同一倒计时（按 started_at 与 accumulated 推算，不靠持续推送），过半与结束检查页双端照常触发，任一端处理后写状态、另一端跟随消停。tasks 里 `auto_start` 为 true 的新任务到达且本机未在计时该任务时，立即开始计时（有计时在跑则排队），消费后把 auto_start 回写为 false；App 启动时对账一次，防离线漏接。
+- 验收：xcodebuild 构建通过；自查并在留言里写明结果——全仓 grep 无 `sb_secret_`、`supabase_key.txt` 与 Secrets 生成物均未被 git 跟踪。真机联调（用户注册账号后与安卓端互看计时）由用户和 Jarvis 配合完成，你做不到的联调项在留言里明确列为待验，不要声称已验。
+- 回报：按开工协议第 4 条。
 
 ## 留言区
 

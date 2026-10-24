@@ -186,13 +186,16 @@ struct CalendarView: View {
     }
 
     private var timeline: some View {
-        let totalHeight = CGFloat(endHour - startHour) * hourHeight
+        // 缓存一次，避免 computed property 在同一 body 评估中多次调用返回不同值
+        let sh = startHour
+        let eh = endHour
+        let totalHeight = CGFloat(eh - sh) * hourHeight
         let nowMin = minuteOfDay(ms: nowMs())
         return ScrollView {
             ZStack(alignment: .topLeading) {
                 // 小时网格
                 VStack(spacing: 0) {
-                    ForEach(startHour..<endHour, id: \.self) { h in
+                    ForEach(sh..<eh, id: \.self) { h in
                         HStack(alignment: .top, spacing: 8) {
                             Text(hhmmText(h * 60))
                                 .font(.system(size: 10))
@@ -208,11 +211,11 @@ struct CalendarView: View {
                 // 双列块
                 HStack(alignment: .top, spacing: 8) {
                     Color.clear.frame(width: 48)
-                    planColumn(totalHeight: totalHeight)
-                    actualColumn(totalHeight: totalHeight)
+                    planColumn(sh: sh, totalHeight: totalHeight)
+                    actualColumn(sh: sh, totalHeight: totalHeight)
                 }
-                // 当前时间红线
-                if nowMin >= startHour * 60 && nowMin <= endHour * 60 {
+                // 当前时间红线：用与网格同一批 sh/eh，避免偏移错位
+                if nowMin >= sh * 60 && nowMin <= eh * 60 {
                     HStack(spacing: 4) {
                         Color.clear.frame(width: 48)
                         Rectangle().fill(Color.red).frame(height: 1.5)
@@ -220,7 +223,8 @@ struct CalendarView: View {
                             .font(.system(size: 10, weight: .medium))
                             .foregroundColor(.red)
                     }
-                    .offset(y: CGFloat(nowMin - startHour * 60) / 60 * hourHeight - 6)
+                    .offset(y: CGFloat(nowMin - sh * 60) / 60 * hourHeight - 6)
+                    .id("nowLine-\(nowMin)")  // 每分钟强制重建，防止 SwiftUI 复用旧位置
                 }
             }
             .padding(.horizontal, 10)
@@ -228,20 +232,20 @@ struct CalendarView: View {
         }
     }
 
-    private func yPos(_ startMin: Int) -> CGFloat {
-        CGFloat(startMin - startHour * 60) / 60 * hourHeight
+    private func yPos(_ startMin: Int, sh: Int) -> CGFloat {
+        CGFloat(startMin - sh * 60) / 60 * hourHeight
     }
 
     private func blockHeight(_ startMin: Int, _ endMin: Int) -> CGFloat {
         max(17, CGFloat(endMin - startMin) / 60 * hourHeight - 2)
     }
 
-    private func planColumn(totalHeight: CGFloat) -> some View {
+    private func planColumn(sh: Int, totalHeight: CGFloat) -> some View {
         ZStack(alignment: .topLeading) {
             Color.clear
             ForEach(Array((planDisp ?? []).enumerated()), id: \.offset) { _, b in
                 VStack(spacing: 0) {
-                    Color.clear.frame(height: yPos(b.block.startMin))
+                    Color.clear.frame(height: yPos(b.block.startMin, sh: sh))
                     VStack(alignment: .leading, spacing: 1) {
                         Text(b.title + (b.running ? " ▶" : ""))
                             .font(.system(size: 11, weight: .medium))
@@ -269,12 +273,12 @@ struct CalendarView: View {
         .frame(height: totalHeight, alignment: .top)
     }
 
-    private func actualColumn(totalHeight: CGFloat) -> some View {
+    private func actualColumn(sh: Int, totalHeight: CGFloat) -> some View {
         ZStack(alignment: .topLeading) {
             Color.clear
             ForEach(Array(actualDisp.enumerated()), id: \.offset) { _, a in
                 VStack(spacing: 0) {
-                    Color.clear.frame(height: yPos(a.startMin))
+                    Color.clear.frame(height: yPos(a.startMin, sh: sh))
                     VStack(alignment: .leading, spacing: 1) {
                         Text(a.title + (a.running ? " ▶" : ""))
                             .font(.system(size: 11, weight: .medium))

@@ -87,4 +87,6 @@ func minuteOfDay(ms: Int64) -> Int {
 extension Notification.Name {
     /// 悬浮面板显隐变化（设置开关 / 面板上的收起按钮都会发这个通知）
     static let knowdoPanelVisibilityChanged = Notification.Name("knowdo.panelVisibilityChanged")
+    /// 悬浮面板展开/收缩（hover 触发）；userInfo["expanded"]: Bool
+    static let knowdoPanelExpansionChanged  = Notification.Name("knowdo.panelExpansionChanged")
 }

@@ -7,8 +7,8 @@ Jarvis 审查完 Claude Code 的每次推送后，会把意见写在这里，也
 
 - v0.1 工程已交付，SwiftUI，22 个 Swift 文件。
 - **编译通过**（2026-10-24，xcodebuild BUILD SUCCEEDED，零编译错误）。
-- **任务一（SyncManager 接口抽象）完成**（提交 `c60ff51`）：SyncBackend 协议 + DriveBridgeBackend 分离，行为零变化。
-- **任务二（Supabase 接入）完成**（提交 `82a6d85`）：REST + Realtime + Auth + TimerSync 全套接入。已安装到 `/Applications/KnowDoMac.app`。
+- **任务一（SyncManager 接口抽象）完成**（提交 `0c90c9f`）：SyncBackend 协议 + DriveBridgeBackend 分离，行为零变化。
+- **任务二（Supabase 接入）完成**（提交 `108bcea`）：REST + Realtime + Auth + TimerSync 全套接入。已安装到 `/Applications/KnowDoMac.app`。
 - **任务队列已清空**。等待用户真机联调（注册账号 → 与安卓端互看计时）。
 
 ## 开工协议（最重要，先读这节）

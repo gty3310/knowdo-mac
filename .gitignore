@@ -31,3 +31,5 @@ playground.xcworkspace
 *_key.txt
 *_secret.txt
 supabase_key.txt
+# 从密钥文件生成的 Swift 常量（同样不入库）
+KnowDoMac/Secrets.swift

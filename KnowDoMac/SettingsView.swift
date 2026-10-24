@@ -1,17 +1,23 @@
 import ServiceManagement
 import SwiftUI
 
-/// 设置 sheet：桥文件、悬浮面板、开机自动启动、关于。
+/// 设置 sheet：账号（Supabase）、桥文件、悬浮面板、开机自动启动、关于。
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var sync = SyncManager.shared
+    @ObservedObject private var auth = SupabaseAuth.shared
     @AppStorage("showFloatingPanel") private var showFloatingPanel: Bool = true
     @State private var loginEnabled: Bool = false
     @State private var loginError: String? = nil
+    @State private var emailInput: String = ""
+    @State private var passwordInput: String = ""
+    @State private var isSignUp = false
 
     var body: some View {
         VStack(spacing: 0) {
             Form {
+                accountSection
+
                 Section("桥文件（与手机版共用同一个 tasks.json）") {
                     LabeledContent("当前文件") {
                         Text(sync.bridgeURL?.path ?? "未选择")
@@ -78,8 +84,72 @@ struct SettingsView: View {
             }
             .padding(12)
         }
-        .frame(width: 480, height: 560)
+        .frame(width: 480, height: 680)
         .onAppear { refreshLoginStatus() }
+    }
+
+    @ViewBuilder
+    private var accountSection: some View {
+        Section("账号（Supabase 云同步）") {
+            if auth.isLoggedIn {
+                LabeledContent("已登录") {
+                    Text(auth.userEmail ?? "")
+                        .font(.system(size: 11.5))
+                        .foregroundColor(.secondary)
+                }
+                LabeledContent("同步状态") {
+                    Text(sync.lastStatus)
+                        .font(.system(size: 11.5))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+                Button("退出登录") {
+                    Task {
+                        await auth.signOut()
+                        await MainActor.run { SyncManager.shared.handleAuthChange() }
+                    }
+                }
+            } else {
+                TextField("邮箱", text: $emailInput)
+                    .textContentType(.emailAddress)
+                SecureField("密码", text: $passwordInput)
+                if let err = auth.authError {
+                    Text(err)
+                        .font(.system(size: 11))
+                        .foregroundColor(.red)
+                }
+                HStack {
+                    Button(isSignUp ? "注册" : "登录") {
+                        let e = emailInput.trimmingCharacters(in: .whitespaces)
+                        let p = passwordInput
+                        Task {
+                            if isSignUp {
+                                await auth.signUp(email: e, password: p)
+                            } else {
+                                await auth.signIn(email: e, password: p)
+                            }
+                            if auth.isLoggedIn {
+                                await MainActor.run { SyncManager.shared.handleAuthChange() }
+                            }
+                        }
+                    }
+                    .disabled(emailInput.isEmpty || passwordInput.isEmpty || auth.isLoading)
+                    Button(isSignUp ? "已有账号？登录" : "没有账号？注册") {
+                        isSignUp.toggle()
+                        auth.authError = nil
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(.accentColor)
+                    .font(.system(size: 11.5))
+                    if auth.isLoading {
+                        ProgressView().scaleEffect(0.6)
+                    }
+                }
+                Text("登录后自动启用云同步；未登录时仍可用本地 Drive 桥文件模式。")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
+        }
     }
 
     private func refreshLoginStatus() {

@@ -14,13 +14,13 @@ protocol SyncBackend: AnyObject {
     var sourceURL: URL? { get }
 
     /// 读取后端最新数据。未就绪或读失败抛出错误。
-    func fetchLatest() throws -> BackendData
+    func fetchLatest() async throws -> BackendData
     /// 把合并后的数据写回后端。
-    func write(_ data: BackendData) throws
+    func write(_ data: BackendData) async throws
     /// 回读刚写入的数据，用于写后校验（四铁律第四条）。
-    func readBack() throws -> BackendData
+    func readBack() async throws -> BackendData
 
-    /// 让用户配置这个后端（Drive：弹文件选择框；Supabase：弹登录 UI）。
+    /// 让用户配置这个后端（Drive：弹文件选择框；Supabase：触发登录 UI）。
     /// completion(true) = 配置成功，SyncManager 应立即调用 synchronize()。
     func configure(completion: @escaping (Bool) -> Void)
 }

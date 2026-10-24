@@ -27,6 +27,12 @@
 		B10000000000000000000012 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000012 /* Assets.xcassets */; };
 		B10000000000000000000013 /* SyncBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000013 /* SyncBackend.swift */; };
 		B10000000000000000000014 /* DriveBridgeBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000014 /* DriveBridgeBackend.swift */; };
+		B1000000000000000000001A /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000000000000000000001A /* Secrets.swift */; };
+		B10000000000000000000015 /* SupabaseAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000015 /* SupabaseAuth.swift */; };
+		B10000000000000000000016 /* SupabaseHTTP.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000016 /* SupabaseHTTP.swift */; };
+		B10000000000000000000017 /* SupabaseRealtime.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000017 /* SupabaseRealtime.swift */; };
+		B10000000000000000000018 /* SupabaseBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000018 /* SupabaseBackend.swift */; };
+		B10000000000000000000019 /* TimerSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000019 /* TimerSync.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -50,6 +56,12 @@
 		F10000000000000000000012 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		F10000000000000000000013 /* SyncBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncBackend.swift; sourceTree = "<group>"; };
 		F10000000000000000000014 /* DriveBridgeBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveBridgeBackend.swift; sourceTree = "<group>"; };
+		F1000000000000000000001A /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
+		F10000000000000000000015 /* SupabaseAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseAuth.swift; sourceTree = "<group>"; };
+		F10000000000000000000016 /* SupabaseHTTP.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseHTTP.swift; sourceTree = "<group>"; };
+		F10000000000000000000017 /* SupabaseRealtime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseRealtime.swift; sourceTree = "<group>"; };
+		F10000000000000000000018 /* SupabaseBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseBackend.swift; sourceTree = "<group>"; };
+		F10000000000000000000019 /* TimerSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerSync.swift; sourceTree = "<group>"; };
 		F10000000000000000000020 /* KnowDoMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KnowDoMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -95,6 +107,12 @@
 				F10000000000000000000012 /* Assets.xcassets */,
 				F10000000000000000000013 /* SyncBackend.swift */,
 				F10000000000000000000014 /* DriveBridgeBackend.swift */,
+				F1000000000000000000001A /* Secrets.swift */,
+				F10000000000000000000015 /* SupabaseAuth.swift */,
+				F10000000000000000000016 /* SupabaseHTTP.swift */,
+				F10000000000000000000017 /* SupabaseRealtime.swift */,
+				F10000000000000000000018 /* SupabaseBackend.swift */,
+				F10000000000000000000019 /* TimerSync.swift */,
 			);
 			path = KnowDoMac;
 			sourceTree = "<group>";
@@ -195,6 +213,12 @@
 				B10000000000000000000011 /* SettingsView.swift in Sources */,
 				B10000000000000000000013 /* SyncBackend.swift in Sources */,
 				B10000000000000000000014 /* DriveBridgeBackend.swift in Sources */,
+				B1000000000000000000001A /* Secrets.swift in Sources */,
+				B10000000000000000000015 /* SupabaseAuth.swift in Sources */,
+				B10000000000000000000016 /* SupabaseHTTP.swift in Sources */,
+				B10000000000000000000017 /* SupabaseRealtime.swift in Sources */,
+				B10000000000000000000018 /* SupabaseBackend.swift in Sources */,
+				B10000000000000000000019 /* TimerSync.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

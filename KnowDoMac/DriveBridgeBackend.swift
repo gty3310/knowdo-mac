@@ -45,14 +45,14 @@ final class DriveBridgeBackend: SyncBackend {
         }
     }
 
-    func fetchLatest() throws -> BackendData {
+    func fetchLatest() async throws -> BackendData {
         guard let url = currentURL else { throw BackendError.notConfigured }
         let data = try Data(contentsOf: url)
         let bridge = try BridgeFile.decode(data)
         return BackendData(tasks: bridge.tasks, meta: bridge.meta)
     }
 
-    func write(_ data: BackendData) throws {
+    func write(_ data: BackendData) async throws {
         guard let url = currentURL else { throw BackendError.notConfigured }
         let bridge = BridgeFile(tasks: data.tasks, meta: data.meta)
         // 直接覆写（不用 .atomic：security-scoped 单文件书签下，
@@ -61,7 +61,7 @@ final class DriveBridgeBackend: SyncBackend {
         try encoded.write(to: url, options: [])
     }
 
-    func readBack() throws -> BackendData {
+    func readBack() async throws -> BackendData {
         guard let url = currentURL else { throw BackendError.notConfigured }
         let data = try Data(contentsOf: url)
         let bridge = try BridgeFile.decode(data)

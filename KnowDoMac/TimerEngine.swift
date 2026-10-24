@@ -12,6 +12,7 @@ struct TimerSlot: Codable, Equatable {
 /// 计时引擎：全局最多一个计时中 + 一个暂停槽（与安卓 TimerState 语义一致）。
 /// 每秒 tick 一次：刷新剩余/已用、查过半、查结束、扫 nextStartAt 开始提醒。
 /// 槽位持久化到 UserDefaults：App 退出/崩溃后，计时中的任务恢复为「暂停」态，不丢进度。
+@MainActor
 final class TimerEngine: ObservableObject {
     static let shared = TimerEngine()
 
@@ -277,6 +278,91 @@ final class TimerEngine: ObservableObject {
             segmentStartMs: segmentStart.map { Int64($0.timeIntervalSince1970 * 1000) } ?? 0)
         if let data = try? JSONEncoder().encode(p) {
             UserDefaults.standard.set(data, forKey: slotsKey)
+        }
+        NotificationCenter.default.post(name: .knowdoTimerStateChanged, object: nil)
+    }
+
+    // MARK: - Supabase timer_state 钩子
+
+    /// 当前计时状态快照，供 TimerSync 推送到 Supabase user_state.timer_state。
+    func currentTimerState() -> [String: Any] {
+        let phase: String
+        let taskId: String
+        let accumulated: Int
+        let duration: Int
+        var startedAt: Int64 = 0
+
+        if let r = running {
+            phase = "running"
+            taskId = r.taskId
+            accumulated = liveElapsed(of: r)
+            duration = r.plannedSeconds
+            startedAt = segmentStart.map { Int64($0.timeIntervalSince1970 * 1000) } ?? 0
+        } else if let p = paused {
+            phase = "paused"
+            taskId = p.taskId
+            accumulated = p.accumulatedSeconds
+            duration = p.plannedSeconds
+        } else {
+            phase = "idle"
+            taskId = ""
+            accumulated = 0
+            duration = 0
+        }
+        return [
+            "task_id": taskId,
+            "phase": phase,
+            "started_at": startedAt,
+            "accumulated_seconds": accumulated,
+            "duration_seconds": duration,
+            "updated_by": myDeviceId(),
+            "updated_at": nowMs()
+        ]
+    }
+
+    /// 收到远端 timer_state 后，如果比本地新且来自不同设备，则应用它。
+    func applyRemoteTimerState(_ state: [String: Any]) {
+        guard let remoteAt = state["updated_at"] as? Int64,
+              let updatedBy = state["updated_by"] as? String,
+              updatedBy != myDeviceId() else { return }
+        // 本地有更新的状态则忽略远端
+        let localAt = (currentTimerState()["updated_at"] as? Int64) ?? 0
+        guard remoteAt > localAt else { return }
+
+        guard let phase = state["phase"] as? String,
+              let taskId = state["task_id"] as? String else { return }
+
+        switch phase {
+        case "running":
+            let accumulated = state["accumulated_seconds"] as? Int ?? 0
+            let duration = state["duration_seconds"] as? Int ?? 0
+            let startedAt = state["started_at"] as? Int64 ?? 0
+            // 不打断本机正在运行的计时；只在 idle 时接管
+            if running == nil && paused == nil {
+                let elapsed = startedAt > 0
+                    ? Int((nowMs() - startedAt) / 1000) + accumulated
+                    : accumulated
+                let slot = TimerSlot(taskId: taskId,
+                                     plannedSeconds: duration,
+                                     accumulatedSeconds: elapsed,
+                                     halfFired: false)
+                paused = slot   // 恢复为暂停态（本机不自动 resume 别人的计时）
+                persist()
+            }
+        case "paused":
+            let accumulated = state["accumulated_seconds"] as? Int ?? 0
+            let duration = state["duration_seconds"] as? Int ?? 0
+            if running == nil && paused == nil {
+                paused = TimerSlot(taskId: taskId,
+                                   plannedSeconds: duration,
+                                   accumulatedSeconds: accumulated,
+                                   halfFired: false)
+                persist()
+            }
+        case "idle":
+            break
+        default:
+            break
         }
     }
 

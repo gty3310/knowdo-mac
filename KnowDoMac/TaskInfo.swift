@@ -3,6 +3,7 @@ import Foundation
 
 /// 把一个任务的全部信息整理成一段文字——字段、顺序、措辞与安卓
 /// AiLaunchActivity.buildInfo 逐项一致，悬浮窗/编辑框的「复制」按钮共用。
+@MainActor
 func buildTaskInfo(_ t: TaskItem) -> String {
     var sb = "\n"
     sb += "任务：\(t.title)\n"

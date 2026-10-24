@@ -9,6 +9,7 @@ import Foundation
 /// 2）写之前重新读一遍最新文件再合并；
 /// 3）合并按 id 对齐，updatedAtMs 新者胜，deleted 墓碑不许复活；
 /// 4）写后回读校验任务 id 集合，丢了就并集补写一次。
+@MainActor
 final class SyncManager: ObservableObject {
     static let shared = SyncManager()
 
@@ -20,11 +21,15 @@ final class SyncManager: ObservableObject {
     @Published private(set) var scheduleRaw: JSONValue? = nil
 
     private let driveBackend = DriveBridgeBackend()
-    /// 当前活跃后端；任务二接入 Supabase 后可在此切换
-    private var backend: SyncBackend { driveBackend }
+    private let supabaseBackend = SupabaseBackend()
+    /// 已登录 Supabase 时用 Supabase 后端，否则用 Drive 桥。
+    private var backend: SyncBackend {
+        SupabaseAuth.shared.isLoggedIn ? supabaseBackend : driveBackend
+    }
 
     private var pollTimer: Timer? = nil
     private var started = false
+    private var syncInFlight = false
 
     private init() {}
 
@@ -38,10 +43,28 @@ final class SyncManager: ObservableObject {
         }
         bridgeURL = driveBackend.sourceURL
         bridgeName = driveBackend.displayName
+        if SupabaseAuth.shared.isLoggedIn {
+            SupabaseRealtime.shared.onRemoteChange = { [weak self] in self?.synchronize() }
+            SupabaseRealtime.shared.connect()
+            TimerSync.shared.start()
+        }
         synchronize()
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
             self?.synchronize()
         }
+    }
+
+    /// 登录/登出后调用，切换后端并重新连接 Realtime。
+    func handleAuthChange() {
+        if SupabaseAuth.shared.isLoggedIn {
+            SupabaseRealtime.shared.onRemoteChange = { [weak self] in self?.synchronize() }
+            SupabaseRealtime.shared.connect()
+            TimerSync.shared.start()
+        } else {
+            SupabaseRealtime.shared.disconnect()
+            TimerSync.shared.stop()
+        }
+        synchronize()
     }
 
     // MARK: - 桥文件选择
@@ -110,16 +133,26 @@ final class SyncManager: ObservableObject {
     }
 
     func synchronize() {
-        guard backend.isConfigured else {
-            lastStatus = "尚未选择桥文件"
+        guard !syncInFlight else { return }
+        syncInFlight = true
+        Task { [weak self] in
+            await self?.doSync()
+            self?.syncInFlight = false
+        }
+    }
+
+    private func doSync() async {
+        let be = backend
+        guard be.isConfigured else {
+            lastStatus = SupabaseAuth.shared.isLoggedIn ? "正在连接 Supabase…" : "尚未选择桥文件"
             return
         }
-        // 铁律二：写之前（此处为读）先拿最新远端
+        // 铁律二：写之前先拿最新远端
         let remote: BackendData
         do {
-            remote = try backend.fetchLatest()
+            remote = try await be.fetchLatest()
         } catch {
-            lastStatus = "读取桥文件失败：\(error.localizedDescription)"
+            lastStatus = "读取失败：\(error.localizedDescription)"
             return
         }
         scheduleRaw = remote.meta["schedule"]
@@ -130,31 +163,32 @@ final class SyncManager: ObservableObject {
 
         // 铁律一：签名一致就不回写
         if signature(of: merged) != signature(of: remote.tasks) {
-            writeAndVerify(mergedTasks: merged, meta: remote.meta)
+            await writeAndVerify(mergedTasks: merged, meta: remote.meta, backend: be)
         }
         let visible = tasks.filter { !$0.deleted }.count
+        if SupabaseAuth.shared.isLoggedIn {
+            bridgeName = supabaseBackend.displayName
+        }
         lastStatus = "已同步 · 共 \(visible) 个任务 · \(timeFormatter.string(from: Date()))"
 
-        // 同步后的自动动作检查（推迟到下一轮 runloop，避免在 synchronize 里嵌套再同步）
-        DispatchQueue.main.async { [weak self] in
-            self?.postSyncChecks()
-        }
+        // 同步后的自动动作检查
+        postSyncChecks()
     }
 
-    /// 铁律四：写文件 + 回读校验 id 集合；不一致就并集再补写一次。
-    private func writeAndVerify(mergedTasks: [TaskItem], meta: [String: JSONValue]) {
+    /// 铁律四：写 + 回读校验 id 集合；不一致就并集再补写一次。
+    private func writeAndVerify(mergedTasks: [TaskItem], meta: [String: JSONValue], backend be: SyncBackend) async {
         do {
-            try backend.write(BackendData(tasks: mergedTasks, meta: meta))
-            let back = try backend.readBack()
+            try await be.write(BackendData(tasks: mergedTasks, meta: meta))
+            let back = try await be.readBack()
             let expected = Set(mergedTasks.map { $0.id })
             let got = Set(back.tasks.map { $0.id })
             if got != expected {
                 let union = SyncManager.merge(local: back.tasks, remote: mergedTasks)
-                try backend.write(BackendData(tasks: union, meta: back.meta))
+                try await be.write(BackendData(tasks: union, meta: back.meta))
                 if union != tasks { tasks = union }
             }
         } catch {
-            lastStatus = "写入桥文件失败：\(error.localizedDescription)"
+            lastStatus = "写入失败：\(error.localizedDescription)"
         }
     }
 

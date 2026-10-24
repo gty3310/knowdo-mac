@@ -89,4 +89,15 @@ extension Notification.Name {
     static let knowdoPanelVisibilityChanged = Notification.Name("knowdo.panelVisibilityChanged")
     /// 悬浮面板展开/收缩（hover 触发）；userInfo["expanded"]: Bool
     static let knowdoPanelExpansionChanged  = Notification.Name("knowdo.panelExpansionChanged")
+    /// 计时状态变化（start/pause/reset/complete）；TimerSync 监听后推送到 Supabase
+    static let knowdoTimerStateChanged      = Notification.Name("knowdo.timerStateChanged")
+}
+
+/// 设备唯一 ID，存 UserDefaults；跨设备同步 timer_state 时用于标识写入方。
+func myDeviceId() -> String {
+    let key = "knowdo.deviceId"
+    if let id = UserDefaults.standard.string(forKey: key) { return id }
+    let id = UUID().uuidString
+    UserDefaults.standard.set(id, forKey: key)
+    return id
 }

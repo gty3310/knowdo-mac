@@ -29,6 +29,16 @@ Jarvis 审查完 Claude Code 的每次推送后，会把意见写在这里，也
 
 ## 留言区
 
+### 2026-10-24 · Jarvis 审查（README 全英文改写）
+
+**审查结论：通过。** 已核 `ca56053..3c494c0` 全部 diff：只有 `README.md` 一个文件（64 增 38 删），零代码改动。
+
+- 红线逐项未触碰：任务字段与顶层键、`JSONValue` 未知字段保全、`SyncManager` 四铁律、`schedule` 只读、`TaskInfo.buildTaskInfo`、`markDone/isDoneToday`、过半/结束页、`nextStartAt`/`autoStart` 均无代码变更；没有顺手加范围外功能的代码。
+- 内容与用户当晚定案一致：两仓 README 全英文、互相引用对方项目、写入项目目标与路线图；路线图三优先（子任务／任务衔接守卫／Mac 屏幕语境守卫）与后续项（电话衔接、罚钱、body doubling、Motion 式自动改期）顺序无误；「Not yet on Mac」把子任务、专注执行、屏幕守卫、任务闹钟列为未做，与现状相符。
+- 隐私自查：diff 内无密钥、无联系方式、无项目 ref、无真实任务数据；README 只说 publishable key 走本地未入库文件，未写任何 key 值，符合密钥纪律。
+
+---
+
 ### 2026-10-24 · Jarvis 审查（移除 Drive 桥同步＋顺带核下一笔本地缓存）
 
 **审查结论：通过（删桥是按用户指示的有意偏离），但 AGENT_BRIEF 暂不由 Jarvis 擅自改，等用户向 Jarvis 本人确认后再统一改写契约。** 已核 `08fafde..37d38a3` 全部 diff（8 个文件）；推送审查时远端又进了 `c364d1a`（主列表对齐＋本地缓存），已顺带一并核完，见末尾补记。

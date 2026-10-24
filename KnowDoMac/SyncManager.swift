@@ -30,6 +30,7 @@ final class SyncManager: ObservableObject {
     private var pollTimer: Timer? = nil
     private var started = false
     private var syncInFlight = false
+    private var pollTick = 0
 
     private init() {}
 
@@ -43,23 +44,31 @@ final class SyncManager: ObservableObject {
         }
         bridgeURL = driveBackend.sourceURL
         bridgeName = driveBackend.displayName
-        if SupabaseAuth.shared.isLoggedIn {
-            SupabaseRealtime.shared.onRemoteChange = { [weak self] in self?.synchronize() }
-            SupabaseRealtime.shared.connect()
-            TimerSync.shared.start()
-        }
+        if SupabaseAuth.shared.isLoggedIn { connectRealtime() }
         synchronize()
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
-            self?.synchronize()
+        // Drive 桥没有推送，保持 10 秒轮询；Supabase 有 Realtime，轮询只作 30 秒对账兜底。
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            self.pollTick += 1
+            if SupabaseAuth.shared.isLoggedIn && self.pollTick % 3 != 0 { return }
+            self.synchronize()
         }
+    }
+
+    /// Realtime 只有一个回调槽：任务变更触发同步，user_state 变更顺带拉计时状态，由这里统一分发。
+    private func connectRealtime() {
+        SupabaseRealtime.shared.onRemoteChange = { [weak self] in
+            self?.synchronize()
+            Task { @MainActor in await TimerSync.shared.pullAndApply() }
+        }
+        SupabaseRealtime.shared.connect()
+        TimerSync.shared.start()
     }
 
     /// 登录/登出后调用，切换后端并重新连接 Realtime。
     func handleAuthChange() {
         if SupabaseAuth.shared.isLoggedIn {
-            SupabaseRealtime.shared.onRemoteChange = { [weak self] in self?.synchronize() }
-            SupabaseRealtime.shared.connect()
-            TimerSync.shared.start()
+            connectRealtime()
         } else {
             SupabaseRealtime.shared.disconnect()
             TimerSync.shared.stop()
@@ -138,6 +147,8 @@ final class SyncManager: ObservableObject {
         Task { [weak self] in
             await self?.doSync()
             self?.syncInFlight = false
+            // 放到锁释放之后：autoStart 回写触发的 synchronize() 才不会被 guard 丢掉
+            self?.postSyncChecks()
         }
     }
 
@@ -170,9 +181,6 @@ final class SyncManager: ObservableObject {
             bridgeName = supabaseBackend.displayName
         }
         lastStatus = "已同步 · 共 \(visible) 个任务 · \(timeFormatter.string(from: Date()))"
-
-        // 同步后的自动动作检查
-        postSyncChecks()
     }
 
     /// 铁律四：写 + 回读校验 id 集合；不一致就并集再补写一次。
@@ -186,9 +194,26 @@ final class SyncManager: ObservableObject {
                 let union = SyncManager.merge(local: back.tasks, remote: mergedTasks)
                 try await be.write(BackendData(tasks: union, meta: back.meta))
                 if union != tasks { tasks = union }
+            } else if SupabaseAuth.shared.isLoggedIn {
+                adoptServerTimestamps(from: back.tasks, wrote: mergedTasks)
             }
         } catch {
             lastStatus = "写入失败：\(error.localizedDescription)"
+        }
+    }
+
+    /// Supabase 的 updated_at 由服务端生成：写成功后，把刚写出的那些任务的 updatedAt 对齐成服务端值，
+    /// 否则本地与云端的签名永远差一点，会每轮都重写（违反「没变化绝不回写」）。
+    /// 写入后用户又改过的任务（updatedAtMs 已不是写出时的值）不动。
+    private func adoptServerTimestamps(from back: [TaskItem], wrote: [TaskItem]) {
+        let serverById = Dictionary(back.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let wroteMs = Dictionary(wrote.map { ($0.id, $0.updatedAtMs) }, uniquingKeysWith: { a, _ in a })
+        for i in tasks.indices {
+            let id = tasks[i].id
+            guard let srv = serverById[id], wroteMs[id] == tasks[i].updatedAtMs,
+                  srv.updatedAtMs > 0 else { continue }
+            tasks[i].updatedAtMs = srv.updatedAtMs
+            tasks[i].updatedAtISO = srv.updatedAtISO
         }
     }
 

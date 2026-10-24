@@ -13,8 +13,9 @@ final class OverlayWindow: NSWindow {
 final class OverlayManager {
     static let shared = OverlayManager()
 
-    private var window: OverlayWindow? = nil
-    var isShowing: Bool { window != nil }
+    private var windows: [OverlayWindow] = []
+    private var alarmTimer: Timer? = nil
+    var isShowing: Bool { !windows.isEmpty }
 
     private init() {}
 
@@ -22,8 +23,9 @@ final class OverlayManager {
         present(HalfCheckView(task: task))
     }
 
+    /// 时间到：必须弹出（会顶掉正在显示的其它页），盖满所有屏幕，并循环响铃直到处理。
     func showTimeUp(task: TaskItem) {
-        present(TimeUpView(task: task))
+        present(TimeUpView(task: task), alarm: true)
     }
 
     func showStartRemind(task: TaskItem) {
@@ -31,26 +33,57 @@ final class OverlayManager {
     }
 
     func dismiss() {
-        window?.orderOut(nil)
-        window?.close()
-        window = nil
+        alarmTimer?.invalidate()
+        alarmTimer = nil
+        for w in windows {
+            w.orderOut(nil)
+            w.close()
+        }
+        windows = []
     }
 
-    private func present<V: View>(_ view: V) {
+    private func present<V: View>(_ view: V, alarm: Bool = false) {
         dismiss()
-        guard let screen = NSScreen.main else { return }
-        let w = OverlayWindow(contentRect: screen.frame, styleMask: [.borderless],
-                              backing: .buffered, defer: false)
-        w.isReleasedWhenClosed = false
-        w.backgroundColor = NSColor(calibratedRed: 0.05, green: 0.06, blue: 0.09, alpha: 1)
-        w.isOpaque = true
-        w.hasShadow = false
-        w.level = .screenSaver
-        w.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        w.contentViewController = NSHostingController(rootView: view)
-        w.makeKeyAndOrderFront(nil)
+        let screens = NSScreen.screens
+        guard !screens.isEmpty else { return }
+        let main = NSScreen.main ?? screens[0]
+        for screen in screens {
+            let w = OverlayWindow(contentRect: screen.frame, styleMask: [.borderless],
+                                  backing: .buffered, defer: false)
+            w.isReleasedWhenClosed = false
+            w.backgroundColor = NSColor(calibratedRed: 0.05, green: 0.06, blue: 0.09, alpha: 1)
+            w.isOpaque = true
+            w.hasShadow = false
+            w.level = .screenSaver
+            w.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+            w.contentViewController = NSHostingController(rootView: view)
+            w.setFrame(screen.frame, display: true)
+            if screen == main {
+                w.makeKeyAndOrderFront(nil)
+            } else {
+                w.orderFrontRegardless()
+            }
+            windows.append(w)
+        }
         NSApp.activate(ignoringOtherApps: true)
-        window = w
+        if alarm { startAlarm() }
+    }
+
+    private func startAlarm() {
+        playAlarmSound()
+        alarmTimer = Timer.scheduledTimer(withTimeInterval: 2.5, repeats: true) { [weak self] _ in
+            guard self?.isShowing == true else { return }
+            self?.playAlarmSound()
+        }
+    }
+
+    private func playAlarmSound() {
+        if let s = NSSound(named: "Sosumi") ?? NSSound(named: "Glass") {
+            s.stop()
+            s.play()
+        } else {
+            NSSound.beep()
+        }
     }
 }
 

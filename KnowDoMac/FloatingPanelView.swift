@@ -12,17 +12,18 @@ struct FloatingPanelView: View {
     @State private var noteDraft: String = ""
     @State private var saveWork: DispatchWorkItem? = nil
     @State private var copied: Bool = false
-    @State private var isHovered: Bool = false
+    @ObservedObject private var hover = PanelHoverState.shared
 
     private var task: TaskItem? { timer.topTask }
 
     var body: some View {
+        let expanded = hover.expanded
         ZStack {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.black.opacity(0.62))
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: expanded ? 18 : 15, style: .continuous)
+                .fill(Color.black.opacity(expanded ? 0.45 : 0.80))
+            RoundedRectangle(cornerRadius: expanded ? 18 : 15, style: .continuous)
                 .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
-            if isHovered {
+            if expanded {
                 if let task = task {
                     content(for: task)
                 } else {
@@ -32,14 +33,7 @@ struct FloatingPanelView: View {
                 compactBar
             }
         }
-        .frame(width: 320, height: isHovered ? 252 : 44)
-        .onHover { hovering in
-            isHovered = hovering
-            NotificationCenter.default.post(
-                name: .knowdoPanelExpansionChanged,
-                object: nil,
-                userInfo: ["expanded": hovering])
-        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - 有任务时
@@ -63,7 +57,7 @@ struct FloatingPanelView: View {
                     .buttonStyle(.plain)
                     .font(.system(size: 11))
                     .foregroundColor(.white.opacity(0.6))
-                    .help("收起悬浮窗（菜单栏还在）")
+                    .help("收成小胶囊（鼠标再移上来会重新展开）")
             }
 
             // 时间行：左剩余大字，右「已用 / 共计划」
@@ -132,29 +126,31 @@ struct FloatingPanelView: View {
         .onChange(of: task.id) { _, _ in noteDraft = task.note }
     }
 
+    /// 默认形态：只显示「已用 / 共计划」，计时中左侧一个绿点。
     private var compactBar: some View {
-        HStack(spacing: 8) {
-            Text("☕")
-                .font(.system(size: 14))
+        HStack(spacing: 6) {
             if let task = task {
-                Text(task.title)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-                Spacer()
-                Text(clockText(remaining(for: task)))
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                Circle()
+                    .fill(timer.isRunning(task.id) ? Color.green : Color.white.opacity(0.35))
+                    .frame(width: 6, height: 6)
+                Text(clockText(usedSeconds(for: task)))
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
                     .monospacedDigit()
-                    .foregroundColor(.white.opacity(0.85))
+                    .foregroundColor(.white)
+                Text("/")
+                    .font(.system(size: 12))
+                    .foregroundColor(.white.opacity(0.5))
+                Text(clockText(task.durationMinutes * 60))
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundColor(.white.opacity(0.7))
             } else {
                 Text("暂无任务")
                     .font(.system(size: 12))
                     .foregroundColor(.white.opacity(0.6))
-                Spacer()
             }
         }
-        .padding(.horizontal, 14)
-        .frame(height: 44)
+        .padding(.horizontal, 12)
     }
 
     private var emptyState: some View {
@@ -223,9 +219,9 @@ struct FloatingPanelView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: work)
     }
 
+    /// 只收回小胶囊，不隐藏悬浮窗（隐藏改动设置页的开关，免得点一下就找不回来）。
     private func collapse() {
-        UserDefaults.standard.set(false, forKey: "showFloatingPanel")
-        NotificationCenter.default.post(name: .knowdoPanelVisibilityChanged, object: nil)
+        hover.expanded = false
     }
 
     private func showMainWindow() {

@@ -9,6 +9,17 @@ struct TimerSlot: Codable, Equatable {
     var halfFired: Bool
 }
 
+/// 远端 user_state.timer_state 的解析结果。
+struct RemoteTimerState {
+    var taskId: String
+    var phase: String          // running / paused / idle
+    var startedAt: Int64       // epoch 毫秒
+    var accumulated: Int       // 秒
+    var duration: Int          // 秒
+    var updatedBy: String
+    var updatedAt: Int64
+}
+
 /// 计时引擎：全局最多一个计时中 + 一个暂停槽（与安卓 TimerState 语义一致）。
 /// 每秒 tick 一次：刷新剩余/已用、查过半、查结束、扫 nextStartAt 开始提醒。
 /// 槽位持久化到 UserDefaults：App 退出/崩溃后，计时中的任务恢复为「暂停」态，不丢进度。
@@ -241,7 +252,7 @@ final class TimerEngine: ObservableObject {
         segmentStart = nil
         refreshNumbers()
         persist()
-        if let task = SyncManager.shared.task(id: r.taskId), !OverlayManager.shared.isShowing {
+        if let task = SyncManager.shared.task(id: r.taskId) {
             OverlayManager.shared.showTimeUp(task: task)
         }
     }
@@ -271,7 +282,8 @@ final class TimerEngine: ObservableObject {
         var segmentStartMs: Int64
     }
 
-    func persist() {
+    /// notify=false：应用远端状态时不要再通知 TimerSync 推回云端（防回声）。
+    func persist(notify: Bool = true) {
         let p = Persisted(
             running: running,
             paused: paused,
@@ -279,91 +291,109 @@ final class TimerEngine: ObservableObject {
         if let data = try? JSONEncoder().encode(p) {
             UserDefaults.standard.set(data, forKey: slotsKey)
         }
-        NotificationCenter.default.post(name: .knowdoTimerStateChanged, object: nil)
+        if notify {
+            NotificationCenter.default.post(name: .knowdoTimerStateChanged, object: nil)
+        }
     }
 
-    // MARK: - Supabase timer_state 钩子
+    // MARK: - Supabase timer_state 钩子（状态口径对齐安卓 SbTimerSync）
 
-    /// 当前计时状态快照，供 TimerSync 推送到 Supabase user_state.timer_state。
+    /// 当前计时状态快照，供 TimerSync 推送到 user_state.timer_state。
+    /// running 时 accumulated 恒为 0，started_at 为「虚拟起点」（本段起点往前推已累计秒数），
+    /// 接收端用 started_at + duration 即得结束时刻。
     func currentTimerState() -> [String: Any] {
-        let phase: String
-        let taskId: String
-        let accumulated: Int
-        let duration: Int
-        var startedAt: Int64 = 0
-
-        if let r = running {
-            phase = "running"
-            taskId = r.taskId
-            accumulated = liveElapsed(of: r)
-            duration = r.plannedSeconds
-            startedAt = segmentStart.map { Int64($0.timeIntervalSince1970 * 1000) } ?? 0
-        } else if let p = paused {
-            phase = "paused"
-            taskId = p.taskId
-            accumulated = p.accumulatedSeconds
-            duration = p.plannedSeconds
-        } else {
-            phase = "idle"
-            taskId = ""
-            accumulated = 0
-            duration = 0
-        }
-        return [
-            "task_id": taskId,
-            "phase": phase,
-            "started_at": startedAt,
-            "accumulated_seconds": accumulated,
-            "duration_seconds": duration,
-            "updated_by": myDeviceId(),
-            "updated_at": nowMs()
+        var o: [String: Any] = [
+            "task_id": "", "task_title": "", "phase": "idle",
+            "started_at": Int64(0), "accumulated_seconds": 0, "duration_seconds": 0,
         ]
+        if let r = running {
+            let seg = segmentStart.map { Int64($0.timeIntervalSince1970 * 1000) } ?? nowMs()
+            o["task_id"] = r.taskId
+            o["task_title"] = SyncManager.shared.task(id: r.taskId)?.title ?? ""
+            o["phase"] = "running"
+            o["started_at"] = seg - Int64(r.accumulatedSeconds) * 1000
+            o["duration_seconds"] = r.plannedSeconds
+        } else if let p = paused {
+            o["task_id"] = p.taskId
+            o["task_title"] = SyncManager.shared.task(id: p.taskId)?.title ?? ""
+            o["phase"] = "paused"
+            o["accumulated_seconds"] = p.accumulatedSeconds
+            o["duration_seconds"] = p.plannedSeconds
+        }
+        o["updated_by"] = myDeviceId()
+        o["updated_at"] = nowMs()
+        return o
     }
 
-    /// 收到远端 timer_state 后，如果比本地新且来自不同设备，则应用它。
-    func applyRemoteTimerState(_ state: [String: Any]) {
-        guard let remoteAt = state["updated_at"] as? Int64,
-              let updatedBy = state["updated_by"] as? String,
-              updatedBy != myDeviceId() else { return }
-        // 本地有更新的状态则忽略远端
-        let localAt = (currentTimerState()["updated_at"] as? Int64) ?? 0
-        guard remoteAt > localAt else { return }
+    private let lastRemoteAppliedKey = "timerSync.lastRemoteApplied"
 
-        guard let phase = state["phase"] as? String,
-              let taskId = state["task_id"] as? String else { return }
+    /// 应用一份远端 timer_state（Realtime 推送或对账拉取都走这里）。返回 true 表示本机镜像确实变了。
+    /// 防回声：updated_by 是本机，或 updated_at 不比「上次已应用的远端状态」更新，一律忽略。
+    @discardableResult
+    func applyRemoteTimerState(_ st: RemoteTimerState) -> Bool {
+        if st.updatedBy == myDeviceId() { return false }
+        let last = (UserDefaults.standard.object(forKey: lastRemoteAppliedKey) as? NSNumber)?.int64Value ?? 0
+        if st.updatedAt <= last { return false }
+        UserDefaults.standard.set(NSNumber(value: st.updatedAt), forKey: lastRemoteAppliedKey)
 
-        switch phase {
-        case "running":
-            let accumulated = state["accumulated_seconds"] as? Int ?? 0
-            let duration = state["duration_seconds"] as? Int ?? 0
-            let startedAt = state["started_at"] as? Int64 ?? 0
-            // 不打断本机正在运行的计时；只在 idle 时接管
-            if running == nil && paused == nil {
-                let elapsed = startedAt > 0
-                    ? Int((nowMs() - startedAt) / 1000) + accumulated
-                    : accumulated
-                let slot = TimerSlot(taskId: taskId,
-                                     plannedSeconds: duration,
-                                     accumulatedSeconds: elapsed,
-                                     halfFired: false)
-                paused = slot   // 恢复为暂停态（本机不自动 resume 别人的计时）
-                persist()
+        let previousTaskId = currentSlot?.taskId
+        var changed = false
+
+        switch st.phase {
+        case "running" where st.duration > 0:
+            let nowSec = nowMs() / 1000
+            let elapsed = max(0, Int(nowSec - st.startedAt / 1000)) + st.accumulated
+            let lateSec = elapsed - st.duration
+            if lateSec > 600 {
+                // 远端早就过了结束点（那台设备关了/没处理），别在这里突然响铃：落成「到时的暂停」
+                changed = mirrorPaused(st, accumulated: st.duration)
+            } else {
+                let el = min(elapsed, st.duration)
+                if let r = running, r.taskId == st.taskId, r.plannedSeconds == st.duration,
+                   abs(liveElapsed(of: r) - el) < 2 {
+                    break   // 已经是同一个倒计时
+                }
+                if running != nil { SessionStore.shared.close() }
+                if paused?.taskId == st.taskId { paused = nil }
+                running = TimerSlot(taskId: st.taskId, plannedSeconds: st.duration,
+                                    accumulatedSeconds: el, halfFired: el * 2 >= st.duration)
+                segmentStart = Date()
+                changed = true
             }
-        case "paused":
-            let accumulated = state["accumulated_seconds"] as? Int ?? 0
-            let duration = state["duration_seconds"] as? Int ?? 0
-            if running == nil && paused == nil {
-                paused = TimerSlot(taskId: taskId,
-                                   plannedSeconds: duration,
-                                   accumulatedSeconds: accumulated,
-                                   halfFired: false)
-                persist()
+        case "paused" where st.duration > 0:
+            changed = mirrorPaused(st, accumulated: st.accumulated)
+        default:    // idle
+            if running != nil || paused != nil {
+                if running != nil { SessionStore.shared.close() }
+                running = nil
+                paused = nil
+                segmentStart = nil
+                changed = true
             }
-        case "idle":
-            break
-        default:
-            break
         }
+
+        if changed {
+            refreshNumbers()
+            persist(notify: false)
+            // 另一端已处理过半/结束页（继续、加时、完成……）：本机还开着的全屏页跟着消停
+            if OverlayManager.shared.isShowing, st.phase == "idle" || previousTaskId == st.taskId {
+                OverlayManager.shared.dismiss()
+            }
+        }
+        return changed
+    }
+
+    private func mirrorPaused(_ st: RemoteTimerState, accumulated: Int) -> Bool {
+        if running == nil, let p = paused, p.taskId == st.taskId,
+           p.plannedSeconds == st.duration, abs(p.accumulatedSeconds - accumulated) < 2 {
+            return false
+        }
+        if running != nil { SessionStore.shared.close() }
+        running = nil
+        segmentStart = nil
+        paused = TimerSlot(taskId: st.taskId, plannedSeconds: st.duration,
+                           accumulatedSeconds: accumulated, halfFired: accumulated * 2 >= st.duration)
+        return true
     }
 
     /// App 正常退出时调用（AppDelegate.applicationWillTerminate）：

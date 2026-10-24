@@ -83,6 +83,7 @@ final class SupabaseAuth: ObservableObject {
         userId = r.user.id
         userEmail = email
         isLoggedIn = true
+        SupabaseRealtime.shared.updateToken()
     }
 
     private func loadFromKeychain() {

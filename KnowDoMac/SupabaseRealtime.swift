@@ -16,6 +16,8 @@ final class SupabaseRealtime: NSObject, URLSessionWebSocketDelegate {
     private var heartbeatTimer: Timer?
     private var msgRef = 0
     private var isConnected = false
+    private var sentToken = ""
+    private var joinedTopics: [String] = []
 
     // MARK: - 公开接口
 
@@ -48,10 +50,15 @@ final class SupabaseRealtime: NSObject, URLSessionWebSocketDelegate {
     // MARK: - Phoenix 协议
 
     private func joinChannel(userId: String) {
+        // RLS 按人隔离靠 JWT：join 包里必须带 access_token，否则以 anon 身份订阅，收不到自己的行变更
+        let token = SupabaseAuth.shared.accessToken ?? ""
+        sentToken = token
+        joinedTopics = ["realtime:tasks_\(userId)", "realtime:user_state_\(userId)"]
         // 订阅 tasks 表中属于当前用户的行变更
         sendMessage(topic: "realtime:tasks_\(userId)",
                     event: "phx_join",
                     payload: [
+                        "access_token": token,
                         "config": [
                             "broadcast": ["ack": false, "self": false],
                             "presence": ["key": ""],
@@ -65,15 +72,25 @@ final class SupabaseRealtime: NSObject, URLSessionWebSocketDelegate {
         sendMessage(topic: "realtime:user_state_\(userId)",
                     event: "phx_join",
                     payload: [
+                        "access_token": token,
                         "config": [
                             "broadcast": ["ack": false, "self": false],
                             "presence": ["key": ""],
                             "postgres_changes": [
                                 ["event": "*", "schema": "public", "table": "user_state",
-                                 "filter": "id=eq.\(userId)"]
+                                 "filter": "user_id=eq.\(userId)"]
                             ]
                         ]
                     ])
+    }
+
+    /// 令牌刷新后调用：用 access_token 事件把新 JWT 推给已加入的频道。
+    func updateToken() {
+        guard isConnected, let token = SupabaseAuth.shared.accessToken, token != sentToken else { return }
+        sentToken = token
+        for topic in joinedTopics {
+            sendMessage(topic: topic, event: "access_token", payload: ["access_token": token])
+        }
     }
 
     private func startHeartbeat() {
@@ -107,6 +124,8 @@ final class SupabaseRealtime: NSObject, URLSessionWebSocketDelegate {
                     // 5 秒后自动重连
                     try? await Task.sleep(nanoseconds: 5_000_000_000)
                     self?.connect()
+                    // 断线期间可能漏了推送：重连后触发一次对账
+                    self?.onRemoteChange?()
                 }
             }
         }

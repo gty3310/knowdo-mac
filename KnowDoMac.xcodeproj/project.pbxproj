@@ -25,6 +25,8 @@
 		B10000000000000000000010 /* CalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000010 /* CalendarView.swift */; };
 		B10000000000000000000011 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000011 /* SettingsView.swift */; };
 		B10000000000000000000012 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000012 /* Assets.xcassets */; };
+		B10000000000000000000013 /* SyncBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000013 /* SyncBackend.swift */; };
+		B10000000000000000000014 /* DriveBridgeBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000014 /* DriveBridgeBackend.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -46,6 +48,8 @@
 		F10000000000000000000010 /* CalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarView.swift; sourceTree = "<group>"; };
 		F10000000000000000000011 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		F10000000000000000000012 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		F10000000000000000000013 /* SyncBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncBackend.swift; sourceTree = "<group>"; };
+		F10000000000000000000014 /* DriveBridgeBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveBridgeBackend.swift; sourceTree = "<group>"; };
 		F10000000000000000000020 /* KnowDoMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KnowDoMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -89,6 +93,8 @@
 				F10000000000000000000010 /* CalendarView.swift */,
 				F10000000000000000000011 /* SettingsView.swift */,
 				F10000000000000000000012 /* Assets.xcassets */,
+				F10000000000000000000013 /* SyncBackend.swift */,
+				F10000000000000000000014 /* DriveBridgeBackend.swift */,
 			);
 			path = KnowDoMac;
 			sourceTree = "<group>";
@@ -187,6 +193,8 @@
 				B1000000000000000000000F /* TaskEditView.swift in Sources */,
 				B10000000000000000000010 /* CalendarView.swift in Sources */,
 				B10000000000000000000011 /* SettingsView.swift in Sources */,
+				B10000000000000000000013 /* SyncBackend.swift in Sources */,
+				B10000000000000000000014 /* DriveBridgeBackend.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

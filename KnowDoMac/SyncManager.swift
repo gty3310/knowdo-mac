@@ -1,14 +1,14 @@
-import AppKit
 import Foundation
-import UniformTypeIdentifiers
 
-/// 桥文件同步：与安卓 v1.5.3 同一套语义——
-/// 1）按 id 对齐合并，updatedAtMs 新者胜，deleted 墓碑防复活；
-/// 2）**没变化绝不回写**（按 id→updatedAtMs 签名做语义比较）；
-/// 3）写之前重新读一遍最新文件再合并；
-/// 4）写完回读校验任务 id 集合，不一致就并集补写一次。
-/// 全部在主线程跑：桥文件只有几十 KB，主线程读写可忽略，
-/// 换来的是彻底没有并发竞态（这正是安卓端踩过坑后定下的口径）。
+/// 同步管理器：负责同步编排（四铁律）、合并逻辑、任务状态缓存与发布。
+/// 具体的 I/O（Drive 桥文件读写 / Supabase REST+Realtime）由 SyncBackend
+/// 实现承接；切换后端只需替换 `backend` 属性，此类无需改动。
+///
+/// 同步四铁律（与安卓 v1.5.3 口径一致）：
+/// 1）没变化绝不回写（按 id→updatedAtMs 签名做语义比较）；
+/// 2）写之前重新读一遍最新文件再合并；
+/// 3）合并按 id 对齐，updatedAtMs 新者胜，deleted 墓碑不许复活；
+/// 4）写后回读校验任务 id 集合，丢了就并集补写一次。
 final class SyncManager: ObservableObject {
     static let shared = SyncManager()
 
@@ -19,8 +19,10 @@ final class SyncManager: ObservableObject {
     /// 桥顶层 schedule 的原始 JSON（只读，Mac 永不生成/改动它）
     @Published private(set) var scheduleRaw: JSONValue? = nil
 
-    private let bookmarkKey = "bridgeBookmarkData"
-    private var accessingURL: URL? = nil
+    private let driveBackend = DriveBridgeBackend()
+    /// 当前活跃后端；任务二接入 Supabase 后可在此切换
+    private var backend: SyncBackend { driveBackend }
+
     private var pollTimer: Timer? = nil
     private var started = false
 
@@ -31,65 +33,28 @@ final class SyncManager: ObservableObject {
     func start() {
         guard !started else { return }
         started = true
-        restoreBookmark()
+        if let errMsg = driveBackend.restoreBookmark() {
+            lastStatus = errMsg
+        }
+        bridgeURL = driveBackend.sourceURL
+        bridgeName = driveBackend.displayName
         synchronize()
         pollTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
             self?.synchronize()
         }
     }
 
-    // MARK: - 桥文件选择（security-scoped bookmark 持久化）
+    // MARK: - 桥文件选择
 
-    private func restoreBookmark() {
-        guard let data = UserDefaults.standard.data(forKey: bookmarkKey) else { return }
-        var stale = false
-        do {
-            let url = try URL(resolvingBookmarkData: data, options: [.withSecurityScope],
-                              relativeTo: nil, bookmarkDataIsStale: &stale)
-            if url.startAccessingSecurityScopedResource() {
-                accessingURL = url
-            }
-            bridgeURL = url
-            bridgeName = url.lastPathComponent
-            if stale { saveBookmark(for: url) }
-        } catch {
-            lastStatus = "桥文件书签已失效，请在设置里重新选择"
-        }
-    }
-
-    private func saveBookmark(for url: URL) {
-        if let data = try? url.bookmarkData(options: [.withSecurityScope],
-                                            includingResourceValuesForKeys: nil,
-                                            relativeTo: nil) {
-            UserDefaults.standard.set(data, forKey: bookmarkKey)
-        }
-    }
-
-    /// 弹系统文件选择框选桥文件（设置页与主窗口空态共用）。
     func chooseBridgeFile() {
-        let panel = NSOpenPanel()
-        panel.title = "选择知行桥文件 tasks.json"
-        panel.message = "请选择与手机版共用的同一个 tasks.json（需在已同步到本机的 Google Drive 文件夹里）"
-        panel.allowedContentTypes = [.json]
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        panel.canChooseFiles = true
-        panel.nameFieldStringValue = "tasks.json"
-        if let cur = bridgeURL {
-            panel.directoryURL = cur.deletingLastPathComponent()
+        driveBackend.configure { [weak self] success in
+            guard let self = self, success else { return }
+            DispatchQueue.main.async {
+                self.bridgeURL = self.driveBackend.sourceURL
+                self.bridgeName = self.driveBackend.displayName
+                self.synchronize()
+            }
         }
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        if let old = accessingURL {
-            old.stopAccessingSecurityScopedResource()
-            accessingURL = nil
-        }
-        saveBookmark(for: url)
-        if url.startAccessingSecurityScopedResource() {
-            accessingURL = url
-        }
-        bridgeURL = url
-        bridgeName = url.lastPathComponent
-        synchronize()
     }
 
     // MARK: - 查询与修改（所有修改都走这里，随后立刻同步）
@@ -145,55 +110,47 @@ final class SyncManager: ObservableObject {
     }
 
     func synchronize() {
-        guard let url = bridgeURL else {
+        guard backend.isConfigured else {
             lastStatus = "尚未选择桥文件"
             return
         }
-        // 1）读最新远端（读失败绝不覆盖，保住本地）
-        let remote: BridgeFile
+        // 铁律二：写之前（此处为读）先拿最新远端
+        let remote: BackendData
         do {
-            let data = try Data(contentsOf: url)
-            remote = try BridgeFile.decode(data)
+            remote = try backend.fetchLatest()
         } catch {
             lastStatus = "读取桥文件失败：\(error.localizedDescription)"
             return
         }
         scheduleRaw = remote.meta["schedule"]
 
-        // 2）合并远端 → 本地
+        // 铁律三：按 id 对齐合并，updatedAtMs 新者胜
         let merged = SyncManager.merge(local: tasks, remote: remote.tasks)
         if merged != tasks { tasks = merged }
 
-        // 3）合并结果与远端签名一致就不回写（没变化绝不回写）
+        // 铁律一：签名一致就不回写
         if signature(of: merged) != signature(of: remote.tasks) {
-            writeAndVerify(mergedTasks: merged, meta: remote.meta, url: url)
+            writeAndVerify(mergedTasks: merged, meta: remote.meta)
         }
         let visible = tasks.filter { !$0.deleted }.count
         lastStatus = "已同步 · 共 \(visible) 个任务 · \(timeFormatter.string(from: Date()))"
 
-        // 4）同步后的自动动作检查（推迟到下一轮 runloop，避免在 synchronize 里嵌套再同步）
+        // 同步后的自动动作检查（推迟到下一轮 runloop，避免在 synchronize 里嵌套再同步）
         DispatchQueue.main.async { [weak self] in
             self?.postSyncChecks()
         }
     }
 
-    /// 写文件 + 回读校验 id 集合；不一致就并集再补写一次（照安卓 v1.5.3）。
-    private func writeAndVerify(mergedTasks: [TaskItem], meta: [String: JSONValue], url: URL) {
+    /// 铁律四：写文件 + 回读校验 id 集合；不一致就并集再补写一次。
+    private func writeAndVerify(mergedTasks: [TaskItem], meta: [String: JSONValue]) {
         do {
-            let bridge = BridgeFile(tasks: mergedTasks, meta: meta)
-            let data = try bridge.encodeForWrite(tasks: mergedTasks)
-            // 直接覆写（不用 .atomic：security-scoped 单文件书签下，
-            // 原子写要在同目录建临时文件，可能没有目录权限）
-            try data.write(to: url, options: [])
-            // 回读校验
-            let backData = try Data(contentsOf: url)
-            let back = try BridgeFile.decode(backData)
+            try backend.write(BackendData(tasks: mergedTasks, meta: meta))
+            let back = try backend.readBack()
             let expected = Set(mergedTasks.map { $0.id })
             let got = Set(back.tasks.map { $0.id })
             if got != expected {
                 let union = SyncManager.merge(local: back.tasks, remote: mergedTasks)
-                let bridge2 = BridgeFile(tasks: union, meta: back.meta)
-                try bridge2.encodeForWrite(tasks: union).write(to: url, options: [])
+                try backend.write(BackendData(tasks: union, meta: back.meta))
                 if union != tasks { tasks = union }
             }
         } catch {

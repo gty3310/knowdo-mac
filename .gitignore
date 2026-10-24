@@ -25,3 +25,9 @@ playground.xcworkspace
 # 杂项
 *.swp
 *~
+
+# 密钥文件（本地保存，绝不入库）
+*.key
+*_key.txt
+*_secret.txt
+supabase_key.txt

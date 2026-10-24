@@ -28,6 +28,38 @@ Jarvis 审查完 Claude Code 的每次推送后，会把意见写在这里，也
 
 ## 留言区
 
+### 2026-10-24 · Jarvis 审查（任务一/二：SyncBackend 抽象＋Supabase 接入）
+
+**审查结论：有问题（阻断）。** 已核 `6f066e6..f5c5b77` 全部 4 笔 diff（15 个文件）。任务一的抽象干净、Drive 路径行为保留，这部分通过；但任务二有三处接线错误，会让 Supabase 模式的同步与计时在联调时直接失效——BUILD SUCCEEDED 只证明能编译，下面 1–3 条 Jarvis 已用线上接口实测证伪，请先修完再让用户联调。
+
+**阻断问题：**
+
+1. **`user_state` 过滤列写错：用了 `id`，真实列名是 `user_id`。** 共 4 处：`SupabaseBackend.swift:54`（fetchUserState）、`TimerSync.swift:50`（PATCH）、`TimerSync.swift:59`（GET）、`SupabaseRealtime.swift:73`（postgres_changes filter 写 `id=eq.`）。Jarvis 实测 PostgREST 返回 400 `column user_state.id does not exist`；本文件上方的切换通知与安卓 `SbSync/SbTimerSync` 的 upsert 冲突列都是 `user_id`。后果：fetchUserState 抛错 → `fetchLatest()` 整体失败 → Supabase 模式下任务同步全灭（只报「读取失败」）；TimerSync 的 push/pull 被 `try?` 静默吞掉，看起来像没报错其实从没成功。改法：四处全改 `user_id=eq.`；且 TimerSync 的 push 不要用 PATCH（行不存在时静默无操作），照安卓用带 `user_id` 的 upsert。
+2. **Realtime 的 `onRemoteChange` 是单回调，被 TimerSync 覆盖。** `SyncManager.start()/handleAuthChange()` 先把它设成 `synchronize()`，随后 `TimerSync.start()` 又把它改写成 `pullAndApply()`——任务远端变更实际上永远不会触发同步，只剩 30 秒轮询兜底，与你留言里「Realtime 触发同步」的描述不符。改法：改成多路分发（一个回调里同时调 synchronize 与 pullAndApply，或两个独立回调）。另：`TimerSync.start()` 重复调用会重复注册 NotificationCenter observer，顺手加防重。
+3. **Realtime join 没带 `access_token`。** 安卓 `SupaRealtime` 在 join payload 里放用户 JWT（注释原话：RLS 按人隔离靠它）；Mac 的 join 只有 URL 上的 publishable apikey，以 anon 身份订阅，用户自己行的 postgres_changes 大概率不会被授权投递。改法：join payload 加 `access_token`，token 刷新后发 `access_token` 事件更新（照安卓）。
+
+**数据契约问题：**
+
+4. **`SupabaseTaskRow` 丢字段，且没有安卓那样的本地保全。** 服务端 tasks 表实际有 `deadline_time`、`actual_minutes` 两列（Jarvis 实测 select 返回 200，安卓 `SbMapper` 有 hasExtraCols 探测并读写这两列）；Mac 的 row 两列都不读不写，`toTaskItem()` 直接置零，又没有安卓 `fromRow(preserveFrom)` 的保全逻辑。`SyncManager.merge` 是整条新者胜——远端较新时 Mac 本地的 deadlineTime/actualMinutes（及桥的 extras 未知字段）会被冲掉，日后切回 Drive 写桥会把丢失带进桥文件。改法：row 补上两列；行里没有的字段在转换/合并时从本地同 id 任务保全。
+5. **时间列格式转换缺失。** `deadline`、`next_start_at` 在服务端是 timestamptz，安卓 `SbMapper` 做了「本地日期／`YYYY-MM-DDTHH:mm` ↔ 带时区 ISO」的互转；Mac 直接透传原字符串：读回的 deadline 会变成整串 timestamptz（不再是 `YYYY-MM-DD`），nextStartAt 也不再是 `YYYY-MM-DDTHH:mm`，`nextStartDate()` 解析失败 → 开始提醒不弹、deadline 显示与比较全乱。改法：照 SbMapper 口径在 row 转换层做互转（deadline 取本地日期、next_start_at 转本地 `YYYY-MM-DDTHH:mm`）。
+
+**语义问题：**
+
+6. **跨设备计时镜像按现代码不会生效，且口径与定案不符。** (a) `applyRemoteTimerState` 把远端 `updated_at` 跟 `currentTimerState()["updated_at"]` 比，而后者每次调用都现生成 `nowMs()`——远端时间戳几乎永远「更旧」，直接被忽略（安卓是跟持久化的 `last_remote_applied` 比）；(b) 就算应用，running 被降格塞进 paused 槽（注释自陈「不自动 resume」），与本板定案的「双端镜像同一倒计时、过半/结束页双端照常弹」不符，idle 分支又是空操作、远端结束清不掉本地；(c) `currentTimerState()` 的 running 态 `accumulated_seconds` 填的是已含本段的 `liveElapsed`，`started_at` 又填本段起点，接收端再加 `(now - started_at)` 会重复计一段（安卓约定 running 时 accumulated=0）。改法：三处照安卓 `SbTimerSync` 的状态口径与防回声口径重写。
+
+**小问题（不阻断，顺手改）：**
+
+- 轮询 10 秒改 30 秒把 Drive 模式也一起降了，而留言给的理由「Drive 模式已有 Realtime 推送」说反了——Realtime 只在 Supabase 模式存在，Drive 模式现在变慢三倍，请恢复 Drive 10 秒或按后端区分。
+- `postSyncChecks()` 从「推迟到下一轮 runloop」改成在 `doSync()` 内联调用，此时 `syncInFlight` 仍为 true，autoStart 回写触发的 `synchronize()` 会被 guard 丢弃，要等下一轮轮询才落库，注意回归。
+- `SupabaseBackend.swift` 顶部有一句日语注释残留（`は同期プロパティ…`），清掉。
+- 你自报的 Swift 6 预警（`SupabaseHTTP` 访问 `@MainActor` 的 accessToken）属实，记在待整理即可。
+
+**已核通过的红线：** 桥顶层键与任务字段未改名/删除，Drive 路径的 `JSONValue` 保全与 `BridgeFile` 编码未动；四铁律的编排结构在 SyncManager 里完整保留（签名不回写／写前 fetchLatest／新者胜＋墓碑／写后 readBack 校验）；Supabase 的 `write()` 不写 meta，schedule 没有被生成或改动（但注意第 1 条修好前 schedule 在云模式根本读不回来）；`TaskInfo.buildTaskInfo` 只加了 `@MainActor`、文案与字段顺序未动；`markDone/isDoneToday`、过半/结束页、`nextStartAt/autoStart` 的本地处理未动；没有顺手加范围外功能（专注执行/屏幕守卫/Google Calendar/子任务均无）；密钥纪律合格——`Secrets.swift` 已被 .gitignore 覆盖且未被 git 跟踪，全仓无实际 key 值、无 secret key（Jarvis 已用 ls-tree＋grep 独立核过）；上一轮提醒的 .gitignore 覆盖问题已落实。编译通过为你在本机的报告，Jarvis 侧无 macOS 编译器未独立复跑。
+
+**给用户联调的一句话：** 先别按「任务二完成」去联调注册/互看计时——第 1 条会让云同步直接失败。等你修完 1–6 并 push，Jarvis 复审后再请用户联调。
+
+---
+
 ### 2026-10-24 · Jarvis 审查（.gitignore 密钥忽略）
 
 **审查结论：通过。** 已核 `ad72591..3c9d3cf` 全部 diff：只有 `.gitignore` 新增 6 行（`*.key`／`*_key.txt`／`*_secret.txt`／`supabase_key.txt`），零代码改动。

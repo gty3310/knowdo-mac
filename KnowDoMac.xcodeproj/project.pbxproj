@@ -1,0 +1,288 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		B10000000000000000000001 /* KnowDoMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000001 /* KnowDoMacApp.swift */; };
+		B10000000000000000000002 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000002 /* AppDelegate.swift */; };
+		B10000000000000000000003 /* Util.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000003 /* Util.swift */; };
+		B10000000000000000000004 /* JSONValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000004 /* JSONValue.swift */; };
+		B10000000000000000000005 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000005 /* Models.swift */; };
+		B10000000000000000000006 /* SyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000006 /* SyncManager.swift */; };
+		B10000000000000000000007 /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000007 /* SessionStore.swift */; };
+		B10000000000000000000008 /* TimerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000008 /* TimerEngine.swift */; };
+		B10000000000000000000009 /* TaskInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000009 /* TaskInfo.swift */; };
+		B1000000000000000000000A /* OverlayManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000000000000000000000A /* OverlayManager.swift */; };
+		B1000000000000000000000B /* OverlayViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000000000000000000000B /* OverlayViews.swift */; };
+		B1000000000000000000000C /* FloatingPanelController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000000000000000000000C /* FloatingPanelController.swift */; };
+		B1000000000000000000000D /* FloatingPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000000000000000000000D /* FloatingPanelView.swift */; };
+		B1000000000000000000000E /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000000000000000000000E /* ContentView.swift */; };
+		B1000000000000000000000F /* TaskEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000000000000000000000F /* TaskEditView.swift */; };
+		B10000000000000000000010 /* CalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000010 /* CalendarView.swift */; };
+		B10000000000000000000011 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000011 /* SettingsView.swift */; };
+		B10000000000000000000012 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000012 /* Assets.xcassets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		F10000000000000000000001 /* KnowDoMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowDoMacApp.swift; sourceTree = "<group>"; };
+		F10000000000000000000002 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		F10000000000000000000003 /* Util.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Util.swift; sourceTree = "<group>"; };
+		F10000000000000000000004 /* JSONValue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONValue.swift; sourceTree = "<group>"; };
+		F10000000000000000000005 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		F10000000000000000000006 /* SyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncManager.swift; sourceTree = "<group>"; };
+		F10000000000000000000007 /* SessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionStore.swift; sourceTree = "<group>"; };
+		F10000000000000000000008 /* TimerEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerEngine.swift; sourceTree = "<group>"; };
+		F10000000000000000000009 /* TaskInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskInfo.swift; sourceTree = "<group>"; };
+		F1000000000000000000000A /* OverlayManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayManager.swift; sourceTree = "<group>"; };
+		F1000000000000000000000B /* OverlayViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayViews.swift; sourceTree = "<group>"; };
+		F1000000000000000000000C /* FloatingPanelController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingPanelController.swift; sourceTree = "<group>"; };
+		F1000000000000000000000D /* FloatingPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingPanelView.swift; sourceTree = "<group>"; };
+		F1000000000000000000000E /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		F1000000000000000000000F /* TaskEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskEditView.swift; sourceTree = "<group>"; };
+		F10000000000000000000010 /* CalendarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarView.swift; sourceTree = "<group>"; };
+		F10000000000000000000011 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		F10000000000000000000012 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		F10000000000000000000020 /* KnowDoMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KnowDoMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		AAAAAAAAAAAAAAAAAAAAAA02 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		111111111111111111111111 = {
+			isa = PBXGroup;
+			children = (
+				222222222222222222222222 /* KnowDoMac */,
+				333333333333333333333333 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		222222222222222222222222 /* KnowDoMac */ = {
+			isa = PBXGroup;
+			children = (
+				F10000000000000000000001 /* KnowDoMacApp.swift */,
+				F10000000000000000000002 /* AppDelegate.swift */,
+				F10000000000000000000003 /* Util.swift */,
+				F10000000000000000000004 /* JSONValue.swift */,
+				F10000000000000000000005 /* Models.swift */,
+				F10000000000000000000006 /* SyncManager.swift */,
+				F10000000000000000000007 /* SessionStore.swift */,
+				F10000000000000000000008 /* TimerEngine.swift */,
+				F10000000000000000000009 /* TaskInfo.swift */,
+				F1000000000000000000000A /* OverlayManager.swift */,
+				F1000000000000000000000B /* OverlayViews.swift */,
+				F1000000000000000000000C /* FloatingPanelController.swift */,
+				F1000000000000000000000D /* FloatingPanelView.swift */,
+				F1000000000000000000000E /* ContentView.swift */,
+				F1000000000000000000000F /* TaskEditView.swift */,
+				F10000000000000000000010 /* CalendarView.swift */,
+				F10000000000000000000011 /* SettingsView.swift */,
+				F10000000000000000000012 /* Assets.xcassets */,
+			);
+			path = KnowDoMac;
+			sourceTree = "<group>";
+		};
+		333333333333333333333333 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				F10000000000000000000020 /* KnowDoMac.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		444444444444444444444444 /* KnowDoMac */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 777777777777777777777777 /* Build configuration list for PBXNativeTarget "KnowDoMac" */;
+			buildPhases = (
+				AAAAAAAAAAAAAAAAAAAAAA01 /* Sources */,
+				AAAAAAAAAAAAAAAAAAAAAA02 /* Frameworks */,
+				AAAAAAAAAAAAAAAAAAAAAA03 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = KnowDoMac;
+			productName = KnowDoMac;
+			productReference = F10000000000000000000020 /* KnowDoMac.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		555555555555555555555555 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					444444444444444444444444 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+				};
+			};
+			buildConfigurationList = 666666666666666666666666 /* Build configuration list for PBXProject "KnowDoMac" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 111111111111111111111111;
+			productRefGroup = 333333333333333333333333 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				444444444444444444444444 /* KnowDoMac */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		AAAAAAAAAAAAAAAAAAAAAA03 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B10000000000000000000012 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		AAAAAAAAAAAAAAAAAAAAAA01 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B10000000000000000000001 /* KnowDoMacApp.swift in Sources */,
+				B10000000000000000000002 /* AppDelegate.swift in Sources */,
+				B10000000000000000000003 /* Util.swift in Sources */,
+				B10000000000000000000004 /* JSONValue.swift in Sources */,
+				B10000000000000000000005 /* Models.swift in Sources */,
+				B10000000000000000000006 /* SyncManager.swift in Sources */,
+				B10000000000000000000007 /* SessionStore.swift in Sources */,
+				B10000000000000000000008 /* TimerEngine.swift in Sources */,
+				B10000000000000000000009 /* TaskInfo.swift in Sources */,
+				B1000000000000000000000A /* OverlayManager.swift in Sources */,
+				B1000000000000000000000B /* OverlayViews.swift in Sources */,
+				B1000000000000000000000C /* FloatingPanelController.swift in Sources */,
+				B1000000000000000000000D /* FloatingPanelView.swift in Sources */,
+				B1000000000000000000000E /* ContentView.swift in Sources */,
+				B1000000000000000000000F /* TaskEditView.swift in Sources */,
+				B10000000000000000000010 /* CalendarView.swift in Sources */,
+				B10000000000000000000011 /* SettingsView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		888888888888888888888881 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		888888888888888888888882 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+			};
+			name = Release;
+		};
+		999999999999999999999981 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_HARDENED_RUNTIME = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "知行 KnowDo";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ti.knowdo.mac;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		999999999999999999999982 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_HARDENED_RUNTIME = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "知行 KnowDo";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ti.knowdo.mac;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		666666666666666666666666 /* Build configuration list for PBXProject "KnowDoMac" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				888888888888888888888881 /* Debug */,
+				888888888888888888888882 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		777777777777777777777777 /* Build configuration list for PBXNativeTarget "KnowDoMac" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				999999999999999999999981 /* Debug */,
+				999999999999999999999982 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 555555555555555555555555 /* Project object */;
+}

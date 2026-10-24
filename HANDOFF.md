@@ -29,6 +29,15 @@ Jarvis 审查完 Claude Code 的每次推送后，会把意见写在这里，也
 
 ## 留言区
 
+### 2026-10-24 · Claude Code → Jarvis：主列表对齐手机版＋本地缓存
+
+用户要求：重要任务置顶、显示手机版的列、断网也能看任务。均已按安卓源码（`TaskStore.visibleSorted`、`MainActivity` 列定义）对齐，**未碰数据契约**：
+- 排序＝安卓 visibleSorted：未完成在前 → 必要(★)在前 → deadline 近在前（每日按今天算、无日期排后）→ 创建时间。
+- 列＝安卓默认可见列：任务(★前缀) / 开始时间 / 剩余 / 时长(含实际) / Deadline / 优先(必要·次要) / 情景；「已用」列安卓默认隐藏，Mac 暂未做列开关。
+- 本地缓存：`~/Library/Application Support/KnowDoMac/tasks-cache.json`（tasks＋schedule，按 userId 隔离，换号/登出清空）。启动先载入缓存再同步；离线时改动留在本地，恢复后按 updatedAtMs 新者胜合并写回；离线状态栏显示「离线，显示本地缓存」。BUILD SUCCEEDED，未真机验证断网场景。
+
+---
+
 ### 2026-10-24 · Claude Code → Jarvis：按用户指示移除 Drive 桥同步
 
 用户明确要求「不需要和桥文件同步了，删了那个功能」。已删 `DriveBridgeBackend.swift`（含 pbxproj 引用）、设置页「桥文件」区块、主窗口选桥文件提示（改为「先登录账号」）；`SyncManager` 只剩 Supabase 后端，轮询统一 30 秒对账。**注意影响：未登录时没有任何本地数据源，App 必须登录才能看到任务**（尚无本地缓存）。`SyncBackend` 协议、`BridgeFile`/`JSONValue` 的未知字段保全逻辑原样保留（云端模式仍用 extras 本地保全）。这是对 AGENT_BRIEF「桥文件」契约的有意偏离，来自用户指令，请 Jarvis 同步更新 AGENT_BRIEF。另：悬浮小胶囊态已加回任务名。BUILD SUCCEEDED。

@@ -13,7 +13,9 @@ import Foundation
 final class SyncManager: ObservableObject {
     static let shared = SyncManager()
 
-    @Published private(set) var tasks: [TaskItem] = []
+    @Published private(set) var tasks: [TaskItem] = [] {
+        didSet { scheduleCacheSave() }
+    }
     @Published private(set) var accountName: String = "未登录"
     @Published private(set) var lastStatus: String = "尚未登录"
     /// user_state.schedule 的原始 JSON（只读，Mac 永不生成/改动它）
@@ -26,6 +28,53 @@ final class SyncManager: ObservableObject {
     private var started = false
     private var syncInFlight = false
     private var pollTick = 0
+    private var cacheSaveWork: DispatchWorkItem?
+
+    // MARK: - 本地缓存（断网也能看、能改；恢复后按 updatedAtMs 新者胜合并回云端）
+
+    private struct Cache: Codable {
+        var userId: String
+        var tasks: [TaskItem]
+        var schedule: JSONValue?
+    }
+
+    private var cacheURL: URL {
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("KnowDoMac", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("tasks-cache.json")
+    }
+
+    private func loadCache() {
+        guard let uid = SupabaseAuth.shared.userId,
+              let data = try? Data(contentsOf: cacheURL),
+              let c = try? JSONDecoder().decode(Cache.self, from: data),
+              c.userId == uid else { return }   // 换了账号就不用旧缓存
+        tasks = c.tasks
+        scheduleRaw = c.schedule
+        accountName = SupabaseAuth.shared.userEmail ?? accountName
+        lastStatus = "已载入本地缓存 · 共 \(c.tasks.filter { !$0.deleted }.count) 个任务"
+    }
+
+    private func scheduleCacheSave() {
+        cacheSaveWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.saveCache() }
+        cacheSaveWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: work)
+    }
+
+    private func saveCache() {
+        guard let uid = SupabaseAuth.shared.userId else { return }
+        let c = Cache(userId: uid, tasks: tasks, schedule: scheduleRaw)
+        if let data = try? JSONEncoder().encode(c) {
+            try? data.write(to: cacheURL, options: .atomic)
+        }
+    }
+
+    private func clearCache() {
+        cacheSaveWork?.cancel()
+        try? FileManager.default.removeItem(at: cacheURL)
+    }
 
     private init() {}
 
@@ -34,7 +83,10 @@ final class SyncManager: ObservableObject {
     func start() {
         guard !started else { return }
         started = true
-        if SupabaseAuth.shared.isLoggedIn { connectRealtime() }
+        if SupabaseAuth.shared.isLoggedIn {
+            loadCache()
+            connectRealtime()
+        }
         synchronize()
         // 有 Realtime 推送，轮询只作 30 秒对账兜底。
         pollTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
@@ -62,6 +114,11 @@ final class SyncManager: ObservableObject {
         } else {
             SupabaseRealtime.shared.disconnect()
             TimerSync.shared.stop()
+            clearCache()
+            tasks = []
+            scheduleRaw = nil
+            accountName = "未登录"
+            lastStatus = "尚未登录"
         }
         synchronize()
     }
@@ -140,7 +197,9 @@ final class SyncManager: ObservableObject {
         do {
             remote = try await be.fetchLatest()
         } catch {
-            lastStatus = "读取失败：\(error.localizedDescription)"
+            lastStatus = tasks.isEmpty
+                ? "读取失败：\(error.localizedDescription)"
+                : "离线，显示本地缓存（改动会在恢复连接后自动同步）"
             return
         }
         scheduleRaw = remote.meta["schedule"]

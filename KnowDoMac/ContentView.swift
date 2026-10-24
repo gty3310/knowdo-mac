@@ -10,9 +10,20 @@ struct ContentView: View {
     @State private var showSettings: Bool = false
 
     private var visibleTasks: [TaskItem] { sync.tasks.filter { !$0.deleted } }
-    /// 未完成在前（桥内顺序），今日已完成的灰显排后（与安卓主列表口径一致）
+    /// 与安卓 TaskStore.visibleSorted 同口径：未完成在前、必要在前、deadline 近在前
+    /// （每日重复按今天算，没日期的排后），最后按创建时间。
     private var orderedTasks: [TaskItem] {
-        visibleTasks.filter { !$0.isDoneToday() } + visibleTasks.filter { $0.isDoneToday() }
+        func effDate(_ t: TaskItem) -> String? { t.isDaily ? todayString() : t.deadline }
+        return visibleTasks.sorted { a, b in
+            let da = a.isDoneToday(), db = b.isDoneToday()
+            if da != db { return !da }
+            let pa = a.priority == "must", pb = b.priority == "must"
+            if pa != pb { return pa }
+            let ea = effDate(a), eb = effDate(b)
+            if (ea == nil) != (eb == nil) { return ea != nil }
+            if let ea, let eb, ea != eb { return ea < eb }
+            return a.createdAtMs < b.createdAtMs
+        }
     }
 
     var body: some View {
@@ -24,6 +35,8 @@ struct ContentView: View {
             } else if orderedTasks.isEmpty {
                 emptyState
             } else {
+                TaskColumnHeader()
+                Divider()
                 List(orderedTasks) { task in
                     TaskRowView(task: task, onEdit: { editing = task })
                 }
@@ -144,67 +157,77 @@ struct TaskRowView: View {
         return "▶ \(String(ns.dropFirst(5).prefix(5))) \(timePart)"
     }
 
+    private func cell(_ text: String, _ width: CGFloat, color: Color, bold: Bool = false) -> some View {
+        Text(text)
+            .font(.system(size: 12, weight: bold ? .bold : .regular))
+            .monospacedDigit()
+            .foregroundColor(color)
+            .lineLimit(2)
+            .frame(width: width, alignment: .leading)
+    }
+
     private var rowRemaining: Int? {
         guard let slot = timer.slot(for: task.id) else { return nil }
         if timer.isRunning(task.id) { return timer.remainingSeconds }
         return max(0, slot.plannedSeconds - slot.accumulatedSeconds)
     }
 
+    private var usedTodaySeconds: Int {
+        var u = SessionStore.shared.closedSecondsToday(taskId: task.id)
+        if SessionStore.shared.openTaskId == task.id, SessionStore.shared.openStartMs > 0 {
+            u += max(0, Int((nowMs() - SessionStore.shared.openStartMs) / 1000))
+        }
+        return u
+    }
+
+    private var startText: String {
+        guard let ns = task.nextStartAt, ns.count >= 16 else { return "—" }
+        return String(ns.prefix(10)) == todayString() ? String(ns.suffix(5))
+            : "\(String(ns.dropFirst(5).prefix(5))) \(String(ns.suffix(5)))"
+    }
+
+    private var leftText: String {
+        if let remain = rowRemaining { return String(format: "%d:%02d", remain / 60, remain % 60) }
+        if task.isDoneToday() { return "—" }
+        return "\(max(0, task.durationMinutes - usedTodaySeconds / 60)) 分"
+    }
+
+    private var durText: String {
+        let m = task.durationMinutes
+        let d = m >= 60 ? "\(m / 60) 小时 \(m % 60) 分" : "\(m) 分"
+        return task.actualMinutes > 0 ? d + "\n实\(task.actualMinutes)" : d
+    }
+
+    private var dlText: String {
+        if task.isDaily { return "每日" }
+        guard let d = task.deadline else { return "＋日期" }
+        return String(d.dropFirst(5)) + (task.deadlineTime.map { "\n\($0)" } ?? "")
+    }
+
     var body: some View {
-        HStack(spacing: 10) {
+        let done = task.isDoneToday()
+        let active = timer.slot(for: task.id) != nil
+        HStack(spacing: 0) {
             Toggle("", isOn: doneBinding)
                 .toggleStyle(.checkbox)
                 .labelsHidden()
+                .frame(width: TaskColumns.check, alignment: .leading)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(task.title)
-                    .font(.system(size: 13.5, weight: .medium))
-                    .strikethrough(task.isDoneToday())
-                    .foregroundColor(task.isDoneToday() ? .secondary : .primary)
-                    .lineLimit(1)
-                HStack(spacing: 8) {
-                    if !task.scenarios.isEmpty {
-                        Text(task.scenarios.joined(separator: "、"))
-                    }
-                    if let dl = deadlineLabel {
-                        Text(dl)
-                    }
-                    if let ns = nextStartLabel {
-                        Text(ns).foregroundColor(.green)
-                    }
-                }
-                .font(.system(size: 11))
-                .foregroundColor(.secondary)
+            Text((task.priority == "must" ? "★ " : "") + task.title + (timer.isPaused(task.id) ? "（已暂停）" : "") + (done ? " ✓" : ""))
+                .font(.system(size: 13.5, weight: timer.isRunning(task.id) ? .bold : .medium))
+                .strikethrough(done)
+                .foregroundColor(done ? .secondary : .primary)
                 .lineLimit(1)
-            }
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-            Spacer(minLength: 8)
-
-            if task.focusMode != "off" {
-                Text("专注")
-                    .font(.system(size: 10, weight: .medium))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(Color.orange.opacity(0.18)))
-                    .foregroundColor(.orange)
-            }
-
-            if let remain = rowRemaining {
-                Text(clockText(remain))
-                    .font(.system(size: 13, weight: .semibold))
-                    .monospacedDigit()
-            } else {
-                HStack(spacing: 4) {
-                    Text("\(task.durationMinutes) 分钟")
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary)
-                    if task.actualMinutes > 0 {
-                        Text("实\(task.actualMinutes)分")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                    }
-                }
-            }
+            cell(startText, TaskColumns.start, color: task.nextStartAt == nil ? .secondary : .green)
+            cell(leftText, TaskColumns.left, color: active ? .accentColor : .primary, bold: timer.isRunning(task.id))
+            cell(durText, TaskColumns.dur, color: .accentColor)
+            cell(dlText, TaskColumns.dl, color: (task.deadline == nil && !task.isDaily) ? .secondary : .accentColor)
+            cell(task.priority == "must" ? "必要" : (task.priority == "secondary" ? "次要" : "—"),
+                 TaskColumns.pri, color: task.priority == "must" ? .red : .secondary)
+            cell(task.scenarios.isEmpty ? "＋情景" : task.scenarios.joined(separator: "、"),
+                 TaskColumns.sc, color: task.scenarios.isEmpty ? .secondary : .accentColor)
 
             Button {
                 timer.toggle(taskId: task.id)
@@ -242,5 +265,41 @@ struct TaskRowView: View {
         .padding(.vertical, 3)
         .contentShape(Rectangle())
         .onTapGesture { onEdit() }
+    }
+}
+
+
+/// 任务表列宽（列与安卓默认可见列一致：开始时间/剩余/时长/Deadline/优先/情景；「已用」安卓默认隐藏）。
+enum TaskColumns {
+    static let check: CGFloat = 26
+    static let start: CGFloat = 78
+    static let left: CGFloat = 60
+    static let dur: CGFloat = 78
+    static let dl: CGFloat = 64
+    static let pri: CGFloat = 46
+    static let sc: CGFloat = 96
+    /// 行尾 ▶ 和 ⋯ 菜单占的宽度
+    static let tail: CGFloat = 56
+}
+
+struct TaskColumnHeader: View {
+    var body: some View {
+        HStack(spacing: 0) {
+            Spacer().frame(width: TaskColumns.check)
+            h("任务").frame(maxWidth: .infinity, alignment: .leading)
+            h("开始时间").frame(width: TaskColumns.start, alignment: .leading)
+            h("剩余").frame(width: TaskColumns.left, alignment: .leading)
+            h("时长").frame(width: TaskColumns.dur, alignment: .leading)
+            h("Deadline").frame(width: TaskColumns.dl, alignment: .leading)
+            h("优先").frame(width: TaskColumns.pri, alignment: .leading)
+            h("情景").frame(width: TaskColumns.sc, alignment: .leading)
+            Spacer().frame(width: TaskColumns.tail)
+        }
+        .padding(.horizontal, 26)
+        .padding(.vertical, 6)
+    }
+
+    private func h(_ t: String) -> some View {
+        Text(t).font(.system(size: 11.5)).foregroundColor(.secondary)
     }
 }

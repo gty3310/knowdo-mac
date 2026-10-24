@@ -1,7 +1,7 @@
 import Foundation
 
 /// 同步管理器：负责同步编排（四铁律）、合并逻辑、任务状态缓存与发布。
-/// 具体的 I/O（Drive 桥文件读写 / Supabase REST+Realtime）由 SyncBackend
+/// 具体的 I/O（Supabase REST+Realtime）由 SyncBackend
 /// 实现承接；切换后端只需替换 `backend` 属性，此类无需改动。
 ///
 /// 同步四铁律（与安卓 v1.5.3 口径一致）：
@@ -14,18 +14,13 @@ final class SyncManager: ObservableObject {
     static let shared = SyncManager()
 
     @Published private(set) var tasks: [TaskItem] = []
-    @Published private(set) var bridgeURL: URL? = nil
-    @Published private(set) var bridgeName: String = "未选择桥文件"
-    @Published private(set) var lastStatus: String = "尚未选择桥文件"
-    /// 桥顶层 schedule 的原始 JSON（只读，Mac 永不生成/改动它）
+    @Published private(set) var accountName: String = "未登录"
+    @Published private(set) var lastStatus: String = "尚未登录"
+    /// user_state.schedule 的原始 JSON（只读，Mac 永不生成/改动它）
     @Published private(set) var scheduleRaw: JSONValue? = nil
 
-    private let driveBackend = DriveBridgeBackend()
     private let supabaseBackend = SupabaseBackend()
-    /// 已登录 Supabase 时用 Supabase 后端，否则用 Drive 桥。
-    private var backend: SyncBackend {
-        SupabaseAuth.shared.isLoggedIn ? supabaseBackend : driveBackend
-    }
+    private var backend: SyncBackend { supabaseBackend }
 
     private var pollTimer: Timer? = nil
     private var started = false
@@ -39,18 +34,13 @@ final class SyncManager: ObservableObject {
     func start() {
         guard !started else { return }
         started = true
-        if let errMsg = driveBackend.restoreBookmark() {
-            lastStatus = errMsg
-        }
-        bridgeURL = driveBackend.sourceURL
-        bridgeName = driveBackend.displayName
         if SupabaseAuth.shared.isLoggedIn { connectRealtime() }
         synchronize()
-        // Drive 桥没有推送，保持 10 秒轮询；Supabase 有 Realtime，轮询只作 30 秒对账兜底。
+        // 有 Realtime 推送，轮询只作 30 秒对账兜底。
         pollTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
             guard let self = self else { return }
             self.pollTick += 1
-            if SupabaseAuth.shared.isLoggedIn && self.pollTick % 3 != 0 { return }
+            if self.pollTick % 3 != 0 { return }
             self.synchronize()
         }
     }
@@ -74,19 +64,6 @@ final class SyncManager: ObservableObject {
             TimerSync.shared.stop()
         }
         synchronize()
-    }
-
-    // MARK: - 桥文件选择
-
-    func chooseBridgeFile() {
-        driveBackend.configure { [weak self] success in
-            guard let self = self, success else { return }
-            DispatchQueue.main.async {
-                self.bridgeURL = self.driveBackend.sourceURL
-                self.bridgeName = self.driveBackend.displayName
-                self.synchronize()
-            }
-        }
     }
 
     // MARK: - 查询与修改（所有修改都走这里，随后立刻同步）
@@ -155,7 +132,7 @@ final class SyncManager: ObservableObject {
     private func doSync() async {
         let be = backend
         guard be.isConfigured else {
-            lastStatus = SupabaseAuth.shared.isLoggedIn ? "正在连接 Supabase…" : "尚未选择桥文件"
+            lastStatus = SupabaseAuth.shared.isLoggedIn ? "正在连接 Supabase…" : "尚未登录，请在设置里登录账号"
             return
         }
         // 铁律二：写之前先拿最新远端
@@ -177,9 +154,7 @@ final class SyncManager: ObservableObject {
             await writeAndVerify(mergedTasks: merged, meta: remote.meta, backend: be)
         }
         let visible = tasks.filter { !$0.deleted }.count
-        if SupabaseAuth.shared.isLoggedIn {
-            bridgeName = supabaseBackend.displayName
-        }
+        accountName = supabaseBackend.displayName
         lastStatus = "已同步 · 共 \(visible) 个任务 · \(timeFormatter.string(from: Date()))"
     }
 

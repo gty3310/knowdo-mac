@@ -89,7 +89,7 @@ struct FloatingPanelView: View {
             }
             .buttonStyle(PanelButtonStyle())
 
-            // 笔记（右上角复制按钮；停笔自动保存进桥）
+            // 笔记（右上角复制按钮；停笔自动同步）
             HStack(spacing: 6) {
                 Text("笔记")
                     .font(.system(size: 11))
@@ -164,7 +164,7 @@ struct FloatingPanelView: View {
             Text("暂无待办任务")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(.white)
-            Text(sync.bridgeURL == nil ? "先在主窗口选择桥文件 tasks.json" : "今天的任务都完成了，去主窗口加新的吧")
+            Text(!SupabaseAuth.shared.isLoggedIn ? "先在主窗口设置里登录账号" : "今天的任务都完成了，去主窗口加新的吧")
                 .font(.system(size: 11))
                 .foregroundColor(.white.opacity(0.6))
             Button("打开知行") { showMainWindow() }

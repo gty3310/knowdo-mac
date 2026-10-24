@@ -3,6 +3,7 @@ import SwiftUI
 /// 主窗口：任务表（列与安卓一致）+ 顶部动作（新任务 / 日历 / 设置）+ 底部同步状态。
 struct ContentView: View {
     @ObservedObject private var sync = SyncManager.shared
+    @ObservedObject private var auth = SupabaseAuth.shared
     @ObservedObject private var timer = TimerEngine.shared
     @Environment(\.openWindow) private var openWindow
     @State private var editing: TaskItem? = nil
@@ -18,8 +19,8 @@ struct ContentView: View {
         VStack(spacing: 0) {
             header
             Divider()
-            if sync.bridgeURL == nil {
-                chooseBridgePrompt
+            if !auth.isLoggedIn {
+                loginPrompt
             } else if orderedTasks.isEmpty {
                 emptyState
             } else {
@@ -59,17 +60,15 @@ struct ContentView: View {
         .padding(.vertical, 10)
     }
 
-    private var chooseBridgePrompt: some View {
+    private var loginPrompt: some View {
         VStack(spacing: 12) {
             Spacer()
-            Text("先选一下桥文件")
+            Text("先登录账号")
                 .font(.system(size: 18, weight: .semibold))
-            Text("知行靠 Google Drive 里同一个 tasks.json 和手机版同步数据。\n请选择那个文件（需在已同步到本机的 Drive 文件夹里）。")
+            Text("知行通过云端账号和手机版同步任务。\n请点右上角设置，在「账号」里登录或注册。")
                 .font(.system(size: 13))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
-            Button("选择桥文件 tasks.json…") { sync.chooseBridgeFile() }
-                .buttonStyle(.borderedProminent)
             Spacer()
         }
         .frame(maxWidth: .infinity)
@@ -80,7 +79,7 @@ struct ContentView: View {
             Spacer()
             Text("暂无任务")
                 .font(.system(size: 16, weight: .semibold))
-            Text("点右上角「＋ 新任务」添加，或在手机上添加——会通过桥文件自动同步过来。")
+            Text("点右上角「＋ 新任务」添加，或在手机上添加——会通过云端自动同步过来。")
                 .font(.system(size: 12))
                 .foregroundColor(.secondary)
             Spacer()
@@ -90,7 +89,7 @@ struct ContentView: View {
 
     private var statusBar: some View {
         HStack(spacing: 6) {
-            Text(sync.bridgeName)
+            Text(sync.accountName)
                 .font(.system(size: 11, weight: .medium))
             Text("· \(sync.lastStatus)")
                 .font(.system(size: 11))

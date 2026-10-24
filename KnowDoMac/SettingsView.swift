@@ -1,7 +1,7 @@
 import ServiceManagement
 import SwiftUI
 
-/// 设置 sheet：账号（Supabase）、桥文件、悬浮面板、开机自动启动、关于。
+/// 设置 sheet：账号（Supabase）、同步、悬浮面板、开机自动启动、关于。
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var sync = SyncManager.shared
@@ -18,19 +18,10 @@ struct SettingsView: View {
             Form {
                 accountSection
 
-                Section("桥文件（与手机版共用同一个 tasks.json）") {
-                    LabeledContent("当前文件") {
-                        Text(sync.bridgeURL?.path ?? "未选择")
-                            .font(.system(size: 11.5))
-                            .foregroundColor(.secondary)
-                            .lineLimit(2)
-                            .textSelection(.enabled)
-                    }
-                    HStack {
-                        Button("选择 / 重新选择…") { sync.chooseBridgeFile() }
-                        Button("立即同步一次") { sync.synchronize() }
-                    }
-                    Text("文件需在已同步到本机的 Google Drive 文件夹里。Mac 端遵守同一套同步规矩：没变化不回写、写前复读合并、写后校验。")
+                Section("同步") {
+                    Button("立即同步一次") { sync.synchronize() }
+                        .disabled(!auth.isLoggedIn)
+                    Text("任务经云端账号与手机版同步；schedule 由 Muse 维护，本 App 只读。")
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
                 }
@@ -68,9 +59,6 @@ struct SettingsView: View {
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)
                     Text("许可：CC BY-NC-SA 4.0。礼仪约定：任何人可继续开发/编辑知行，但动手前请先知会作者一声；衍生版本必须同样免费。")
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
-                    Text("与安卓版共用桥文件同步：两边都开着时，改动会在约 10 秒内互相到达；schedule 由 Muse 维护，本 App 只读。")
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
                 }
@@ -145,7 +133,7 @@ struct SettingsView: View {
                         ProgressView().scaleEffect(0.6)
                     }
                 }
-                Text("登录后自动启用云同步；未登录时仍可用本地 Drive 桥文件模式。")
+                Text("登录后自动启用云同步；未登录时无法读取任务。")
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
             }

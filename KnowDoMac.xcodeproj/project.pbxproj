@@ -26,7 +26,6 @@
 		B10000000000000000000011 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000011 /* SettingsView.swift */; };
 		B10000000000000000000012 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000012 /* Assets.xcassets */; };
 		B10000000000000000000013 /* SyncBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000013 /* SyncBackend.swift */; };
-		B10000000000000000000014 /* DriveBridgeBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000014 /* DriveBridgeBackend.swift */; };
 		B1000000000000000000001A /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000000000000000000001A /* Secrets.swift */; };
 		B10000000000000000000015 /* SupabaseAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000015 /* SupabaseAuth.swift */; };
 		B10000000000000000000016 /* SupabaseHTTP.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10000000000000000000016 /* SupabaseHTTP.swift */; };
@@ -55,7 +54,6 @@
 		F10000000000000000000011 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		F10000000000000000000012 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		F10000000000000000000013 /* SyncBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncBackend.swift; sourceTree = "<group>"; };
-		F10000000000000000000014 /* DriveBridgeBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveBridgeBackend.swift; sourceTree = "<group>"; };
 		F1000000000000000000001A /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
 		F10000000000000000000015 /* SupabaseAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseAuth.swift; sourceTree = "<group>"; };
 		F10000000000000000000016 /* SupabaseHTTP.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseHTTP.swift; sourceTree = "<group>"; };
@@ -106,7 +104,6 @@
 				F10000000000000000000011 /* SettingsView.swift */,
 				F10000000000000000000012 /* Assets.xcassets */,
 				F10000000000000000000013 /* SyncBackend.swift */,
-				F10000000000000000000014 /* DriveBridgeBackend.swift */,
 				F1000000000000000000001A /* Secrets.swift */,
 				F10000000000000000000015 /* SupabaseAuth.swift */,
 				F10000000000000000000016 /* SupabaseHTTP.swift */,
@@ -212,7 +209,6 @@
 				B10000000000000000000010 /* CalendarView.swift in Sources */,
 				B10000000000000000000011 /* SettingsView.swift in Sources */,
 				B10000000000000000000013 /* SyncBackend.swift in Sources */,
-				B10000000000000000000014 /* DriveBridgeBackend.swift in Sources */,
 				B1000000000000000000001A /* Secrets.swift in Sources */,
 				B10000000000000000000015 /* SupabaseAuth.swift in Sources */,
 				B10000000000000000000016 /* SupabaseHTTP.swift in Sources */,

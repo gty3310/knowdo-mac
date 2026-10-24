@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - 同步后端协议
 
-/// 数据同步后端接口：Drive 桥文件实现（DriveBridgeBackend）和
+/// 数据同步后端接口：历史上有 Drive 桥文件实现（已移除），现为
 /// Supabase 实现（SupabaseBackend，任务二）都遵循此协议。
 /// SyncManager 只依赖此协议，不直接引用任何具体实现。
 protocol SyncBackend: AnyObject {

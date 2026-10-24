@@ -24,7 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func showMainWindow() {
         NSApp.activate(ignoringOtherApps: true)
         let win = NSApp.windows.first {
-            $0.styleMask.contains(.titled) && !($0 is NSPanel) && $0.canBecomeMain
+            !($0 is NSPanel) && $0.styleMask.contains(.titled)
         }
         win?.makeKeyAndOrderFront(nil)
     }

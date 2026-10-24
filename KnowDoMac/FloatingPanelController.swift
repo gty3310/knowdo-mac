@@ -8,7 +8,7 @@ final class FloatingPanelController: NSObject {
     private let originKey = "floatingPanelOrigin"
 
     func setup() {
-        let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 320, height: 252),
+        let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 320, height: 44),
                         styleMask: [.borderless, .nonactivatingPanel],
                         backing: .buffered, defer: false)
         p.isFloatingPanel = true
@@ -25,7 +25,7 @@ final class FloatingPanelController: NSObject {
            saved.count == 2 {
             p.setFrameOrigin(NSPoint(x: saved[0], y: saved[1]))
         } else if let vf = NSScreen.main?.visibleFrame {
-            p.setFrameOrigin(NSPoint(x: vf.maxX - 336, y: vf.maxY - 268))
+            p.setFrameOrigin(NSPoint(x: vf.maxX - 336, y: vf.maxY - 60))
         }
         NotificationCenter.default.addObserver(
             self, selector: #selector(windowDidMove(_:)),
@@ -33,6 +33,9 @@ final class FloatingPanelController: NSObject {
         NotificationCenter.default.addObserver(
             self, selector: #selector(visibilityChanged(_:)),
             name: .knowdoPanelVisibilityChanged, object: nil)
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(expansionChanged(_:)),
+            name: .knowdoPanelExpansionChanged, object: nil)
         panel = p
         applyVisibility()
     }
@@ -44,6 +47,26 @@ final class FloatingPanelController: NSObject {
 
     @objc private func visibilityChanged(_ note: Notification) {
         applyVisibility()
+    }
+
+    @objc private func expansionChanged(_ note: Notification) {
+        let expanded = (note.userInfo?["expanded"] as? Bool) ?? false
+        resize(expanded: expanded)
+    }
+
+    private func resize(expanded: Bool) {
+        guard let p = panel else { return }
+        let newH: CGFloat = expanded ? 252 : 44
+        let currentFrame = p.frame
+        let newOriginY = currentFrame.maxY - newH
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.18
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            p.animator().setFrame(
+                NSRect(x: currentFrame.origin.x, y: newOriginY,
+                       width: currentFrame.width, height: newH),
+                display: true)
+        }
     }
 
     func applyVisibility() {

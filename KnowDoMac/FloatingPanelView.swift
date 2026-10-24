@@ -12,22 +12,34 @@ struct FloatingPanelView: View {
     @State private var noteDraft: String = ""
     @State private var saveWork: DispatchWorkItem? = nil
     @State private var copied: Bool = false
+    @State private var isHovered: Bool = false
 
     private var task: TaskItem? { timer.topTask }
 
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.black.opacity(0.82))
+                .fill(Color.black.opacity(0.62))
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
-            if let task = task {
-                content(for: task)
+            if isHovered {
+                if let task = task {
+                    content(for: task)
+                } else {
+                    emptyState
+                }
             } else {
-                emptyState
+                compactBar
             }
         }
-        .frame(width: 320, height: 252)
+        .frame(width: 320, height: isHovered ? 252 : 44)
+        .onHover { hovering in
+            isHovered = hovering
+            NotificationCenter.default.post(
+                name: .knowdoPanelExpansionChanged,
+                object: nil,
+                userInfo: ["expanded": hovering])
+        }
     }
 
     // MARK: - 有任务时
@@ -118,6 +130,31 @@ struct FloatingPanelView: View {
         .padding(14)
         .onAppear { noteDraft = task.note }
         .onChange(of: task.id) { _, _ in noteDraft = task.note }
+    }
+
+    private var compactBar: some View {
+        HStack(spacing: 8) {
+            Text("☕")
+                .font(.system(size: 14))
+            if let task = task {
+                Text(task.title)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                Spacer()
+                Text(clockText(remaining(for: task)))
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundColor(.white.opacity(0.85))
+            } else {
+                Text("暂无任务")
+                    .font(.system(size: 12))
+                    .foregroundColor(.white.opacity(0.6))
+                Spacer()
+            }
+        }
+        .padding(.horizontal, 14)
+        .frame(height: 44)
     }
 
     private var emptyState: some View {

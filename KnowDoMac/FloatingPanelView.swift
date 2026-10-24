@@ -126,13 +126,19 @@ struct FloatingPanelView: View {
         .onChange(of: task.id) { _, _ in noteDraft = task.note }
     }
 
-    /// 默认形态：只显示「已用 / 共计划」，计时中左侧一个绿点。
+    /// 默认形态：任务名 +「已用 / 共计划」，计时中左侧一个绿点。
     private var compactBar: some View {
         HStack(spacing: 6) {
             if let task = task {
                 Circle()
                     .fill(timer.isRunning(task.id) ? Color.green : Color.white.opacity(0.35))
                     .frame(width: 6, height: 6)
+                Text(task.title)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white.opacity(0.9))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer(minLength: 4)
                 Text(clockText(usedSeconds(for: task)))
                     .font(.system(size: 13, weight: .semibold, design: .rounded))
                     .monospacedDigit()

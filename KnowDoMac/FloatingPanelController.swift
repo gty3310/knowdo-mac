@@ -36,7 +36,7 @@ private final class FloatingPanel: NSPanel {
 /// 桌面悬浮小窗：默认一个小胶囊（已用 / 共计划），鼠标移入立刻展开成完整面板并变更透明。
 /// 位置以右上角为锚点记忆，展开/收起时右上角不动。
 final class FloatingPanelController: NSObject {
-    static let compactSize = NSSize(width: 150, height: 30)
+    static let compactSize = NSSize(width: 240, height: 30)
     static let expandedSize = NSSize(width: 320, height: 252)
 
     private var panel: NSPanel? = nil

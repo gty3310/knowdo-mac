@@ -100,13 +100,14 @@ final class FloatingPanelController: NSObject {
                               styleMask: [.borderless, .nonactivatingPanel],
                               backing: .buffered, defer: false)
         p.isFloatingPanel = true
-        p.level = .floating
+        // 全屏 App 独占一个 Space：要压过全屏窗口，.floating / .statusBar 都不够，得用 .screenSaver，并且每个 Space 都要加入
+        p.level = .screenSaver
         p.backgroundColor = .clear
         p.isOpaque = false
         p.hasShadow = true
         p.isMovableByWindowBackground = true
         p.hidesOnDeactivate = false
-        p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        p.collectionBehavior = [.canJoinAllSpaces, .canJoinAllApplications, .fullScreenAuxiliary, .stationary, .ignoresCycle]
 
         let host = TrackingHostingView(rootView: FloatingPanelView())
         host.sizingOptions = []
@@ -127,6 +128,10 @@ final class FloatingPanelController: NSObject {
                        name: NSWindow.didResignKeyNotification, object: p)
         nc.addObserver(self, selector: #selector(visibilityChanged(_:)),
                        name: .knowdoPanelVisibilityChanged, object: nil)
+        // 切到全屏 App 的 Space 后，系统不一定把 canJoinAllSpaces 的面板带过去，切换时主动再顶一次
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self, selector: #selector(activeSpaceChanged(_:)),
+            name: NSWorkspace.activeSpaceDidChangeNotification, object: nil)
         // 展开状态只有一个来源（PanelHoverState）：鼠标进出和面板上的「✕」都改它，尺寸跟着它走
         expandedSink = PanelHoverState.shared.$expanded
             .removeDuplicates()
@@ -183,6 +188,11 @@ final class FloatingPanelController: NSObject {
     @objc private func windowDidMove(_ note: Notification) {
         guard !resizing, let f = panel?.frame else { return }
         UserDefaults.standard.set([Double(f.maxX), Double(f.maxY)], forKey: anchorKey)
+    }
+
+    @objc private func activeSpaceChanged(_ note: Notification) {
+        guard let p = panel, p.isVisible else { return }
+        p.orderFrontRegardless()
     }
 
     @objc private func visibilityChanged(_ note: Notification) {

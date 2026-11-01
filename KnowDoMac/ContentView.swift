@@ -201,7 +201,7 @@ struct TaskRowView: View {
                 .labelsHidden()
                 .frame(width: TaskColumns.check, alignment: .leading)
 
-            Text((task.priority == "must" ? "★ " : "") + task.title + (timer.isPaused(task.id) ? "（已暂停）" : "") + (done ? " ✓" : ""))
+            Text((task.priority == "must" ? "★ " : "") + task.title + (task.subtasks.isEmpty ? "" : "  ☰\(task.subtasks.count)") + (timer.isPaused(task.id) ? "（已暂停）" : "") + (done ? " ✓" : ""))
                 .font(.system(size: 13.5, weight: timer.isRunning(task.id) ? .bold : .medium))
                 .strikethrough(done)
                 .foregroundColor(done ? .secondary : .primary)

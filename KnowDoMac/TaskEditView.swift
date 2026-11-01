@@ -52,6 +52,7 @@ struct TaskEditView: View {
                 basicSection
                 timeSection
                 durationSection
+                if !draft.subtasks.isEmpty { subtasksSection }
                 prioritySection
                 noteSection
                 focusSection
@@ -141,6 +142,25 @@ struct TaskEditView: View {
                 Stepper("", value: $draft.actualMinutes, in: 0...1440, step: 5)
                     .labelsHidden()
             }
+        }
+    }
+
+    /// 只读：子任务在手机上编辑，Mac 先能看到；总时长由子任务分钟之和决定（安卓口径）。
+    private var subtasksSection: some View {
+        let subs = draft.subtasks
+        return Section("子任务（\(subs.count) 个 · 共 \(subs.reduce(0) { $0 + $1.minutes }) 分钟）") {
+            ForEach(Array(subs.enumerated()), id: \.element.id) { i, st in
+                HStack(spacing: 8) {
+                    Text("\(i + 1).").foregroundColor(.secondary).monospacedDigit()
+                    Text(st.title.isEmpty ? "（未命名）" : st.title)
+                    Spacer()
+                    Text("\(st.minutes) 分").foregroundColor(.secondary).monospacedDigit()
+                }
+                .font(.system(size: 13))
+            }
+            Text("目前只能查看；增删改请在手机版里做，Mac 不会改动它们。")
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
         }
     }
 

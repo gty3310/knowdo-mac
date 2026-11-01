@@ -52,6 +52,23 @@ final class GuardNotifier: NSObject, UNUserNotificationCenterDelegate {
     }
 }
 
+// MARK: - 出声总闸（Mac 本地偏好，默认静默）
+
+/// Mac 一切会出声的提醒（Time's up 循环响铃、叫回提示音、渐强闹铃）都要先过这道闸。
+/// 默认关：用户常不在电脑旁，出声会打扰周围的人，静默时只亮屏/弹窗/通知。
+/// 只存本机 UserDefaults，不进同步——云端 `idle_nag.sound` 是和安卓共用的字段，这里绝不读写它。
+enum SoundPolicy {
+    static let key = "macSoundEnabled"
+    static var enabled: Bool { UserDefaults.standard.object(forKey: key) as? Bool ?? false }
+
+    /// 播一声系统音；闸关着就什么都不做。
+    static func playOnce(_ names: String...) {
+        guard enabled else { return }
+        if let s = names.lazy.compactMap({ NSSound(named: $0) }).first { s.stop(); s.play() }
+        else { NSSound.beep() }
+    }
+}
+
 // MARK: - 渐强闹铃（叫回页 60 秒无反馈 / 空档催促）
 
 /// 用系统自带音循环播放，音量在 duration 内由小渐大；操作即停、满时长自动停。
@@ -69,6 +86,7 @@ final class AlarmRing {
     /// after 秒后开始响；期间 cancel() 可撤销。
     func arm(after: TimeInterval, duration: TimeInterval = 60) {
         cancel()
+        guard SoundPolicy.enabled else { return }
         armTimer = Timer.scheduledTimer(withTimeInterval: after, repeats: false) { [weak self] _ in
             self?.start(duration: duration)
         }
@@ -76,6 +94,7 @@ final class AlarmRing {
 
     func start(duration: TimeInterval = 60, onFinish: (() -> Void)? = nil) {
         stop()
+        guard SoundPolicy.enabled else { return }
         self.duration = max(5, duration)
         self.onFinish = onFinish
         startedAt = Date()
@@ -150,11 +169,11 @@ final class IdleGuard {
     }
 
     /// 暂停槽里有任务，且：远端镜像的暂停（叫回归发起端管）；或叫回时间在未来；
-    /// 或叫回已发出且是静音模式 / 叫回页正在显示。没设叫回时间的本地暂停（过半页、重启遗留）算空档。
+    /// 或叫回已发出且是静音模式 / 叫回页正在显示。没设叫回时间的本地暂停（过半页、重启遗留）按安卓口径算生效中，不触发守卫页。
     private func timedPauseActive() -> Bool {
         guard let p = TimerEngine.shared.paused else { return false }
         if p.remote == true { return true }
-        guard let ra = p.resumeAtMs, ra > 0 else { return false }
+        guard let ra = p.resumeAtMs, ra > 0 else { return true }   // 对齐安卓：没设叫回时间不算空档
         if ra > nowMs() { return true }
         return p.pauseSilent == true || OverlayManager.shared.isShowing
     }
@@ -165,7 +184,7 @@ final class IdleGuard {
 
     /// 自动档（30 秒巡检）：用户正在我们自己的窗口里操作时不打扰；守卫页返回退出后静默 3 分钟。
     func checkAndFire() {
-        guard Self.enabled, isIdle(), !blocked else { return }
+        guard Self.enabled, !IdleNagStore.shared.settings.suppressIdlePage, isIdle(), !blocked else { return }
         let now = Date()
         guard now.timeIntervalSince(launchedAt) > 20 else { return }     // 刚启动，云端计时还没对账
         guard now >= snoozeUntil else { return }
@@ -177,7 +196,8 @@ final class IdleGuard {
     /// 事件档（完成任务后）：不受静默期约束，3 秒防抖。
     func fireSoon(after delay: TimeInterval) {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-            guard let self, Self.enabled, self.isIdle(), !self.blocked else { return }
+            guard let self, Self.enabled, !IdleNagStore.shared.settings.suppressIdlePage,
+                  self.isIdle(), !self.blocked else { return }
             guard Date().timeIntervalSince(self.lastFiredAt) > 3 else { return }
             self.fire()
         }

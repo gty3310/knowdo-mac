@@ -172,11 +172,12 @@ struct SupabaseTaskRow: Codable {
     var deadline_time: String?      // 额外列，服务端没有时不带
     var actual_minutes: Int?
     private var withExtraCols = false
+    var subtasks: [JSONValue]?          // 只读：子任务列（有列才有值），本 App 永不写回
 
     private enum CodingKeys: String, CodingKey {
         case id, user_id, title, note, scenarios, deadline, `repeat`, duration_minutes, priority,
              status, auto_start, focus_rule, focus_mode, blocked_apps, allowed_apps, primary_app,
-             done_dates, deleted, next_start_at, created_at, updated_at, deadline_time, actual_minutes
+             done_dates, deleted, next_start_at, created_at, updated_at, deadline_time, actual_minutes, subtasks
     }
 
     init(from item: TaskItem, userId: String, withExtraCols: Bool) {
@@ -232,10 +233,13 @@ struct SupabaseTaskRow: Codable {
         deadline_time = try c.decodeIfPresent(String.self, forKey: .deadline_time)
         actual_minutes = try c.decodeIfPresent(Int.self, forKey: .actual_minutes)
         hasExtraKeys = c.contains(.deadline_time)
+        hasSubtasksKey = c.contains(.subtasks)
+        subtasks = try? c.decodeIfPresent([JSONValue].self, forKey: .subtasks)
     }
 
     /// 解码时该行是否带了额外列（没带就从本地保全）
     private var hasExtraKeys = false
+    private var hasSubtasksKey = false
 
     /// 显式写出 null：upsert 要靠 null 把云端的 deadline / next_start_at 等清掉。
     func encode(to encoder: Encoder) throws {
@@ -299,6 +303,11 @@ struct SupabaseTaskRow: Codable {
         }
         // 桥里的未知字段云端放不下，沿用本地的，日后切回 Drive 写桥时不丢
         if let local { t.extras = local.extras }
+        // 子任务：行里带了列就以云端为准（空/null 即清掉），没带列沿用本地
+        if hasSubtasksKey {
+            if let subs = subtasks, !subs.isEmpty { t.extras["subtasks"] = .array(subs) }
+            else { t.extras.removeValue(forKey: "subtasks") }
+        }
         return t
     }
 }

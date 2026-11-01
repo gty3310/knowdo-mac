@@ -96,6 +96,28 @@ struct TaskItem: Identifiable, Equatable {
     }
 }
 
+// MARK: - 子任务（只读）
+
+/// 安卓 v1.11.0 的子任务：tasks.subtasks（jsonb）里的 {id, title, minutes}。
+/// Mac 只读展示：原始数组原样放在 extras["subtasks"]（随缓存落盘、不写回云端），
+/// 所以不认识的子字段也不会丢；本 App 从不写 subtasks 列，手机上的子任务不会被 Mac 冲掉。
+struct Subtask: Identifiable, Equatable {
+    var id: String
+    var title: String
+    var minutes: Int
+}
+
+extension TaskItem {
+    var subtasks: [Subtask] {
+        extras["subtasks"]?.arrayValue?.compactMap { v -> Subtask? in
+            guard case .object(let o) = v else { return nil }
+            return Subtask(id: o["id"]?.stringValue ?? UUID().uuidString,
+                           title: o["title"]?.stringValue ?? "",
+                           minutes: max(1, o["minutes"]?.intValue ?? 5))
+        } ?? []
+    }
+}
+
 // MARK: - 与桥 JSON 互转（经 JSONValue 手工组装，保证未知字段与 null 的写法与安卓一致）
 
 extension TaskItem {

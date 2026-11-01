@@ -36,7 +36,7 @@ final class OverlayManager {
     /// 暂停到点叫回页：一声提示；60 秒内用户没任何反馈 → 起 60 秒渐强闹铃，任何按钮立即停铃。
     func showResumeCall(task: TaskItem, slot: TimerSlot) {
         present(ResumeCallView(task: task, emoji: slot.pauseEmoji ?? "⏸", reason: slot.pauseReason))
-        if let s = NSSound(named: "Glass") { s.stop(); s.play() }
+        SoundPolicy.playOnce("Glass")
         AlarmRing.shared.arm(after: 60, duration: 60)
     }
 
@@ -82,24 +82,19 @@ final class OverlayManager {
             windows.append(w)
         }
         NSApp.activate(ignoringOtherApps: true)
-        if alarm { startAlarm() }
+        if alarm && SoundPolicy.enabled { startAlarm() }
     }
 
     private func startAlarm() {
         playAlarmSound()
         alarmTimer = Timer.scheduledTimer(withTimeInterval: 2.5, repeats: true) { [weak self] _ in
-            guard self?.isShowing == true else { return }
+            guard self?.isShowing == true, SoundPolicy.enabled else { return }
             self?.playAlarmSound()
         }
     }
 
     private func playAlarmSound() {
-        if let s = NSSound(named: "Sosumi") ?? NSSound(named: "Glass") {
-            s.stop()
-            s.play()
-        } else {
-            NSSound.beep()
-        }
+        SoundPolicy.playOnce("Sosumi", "Glass")
     }
 }
 

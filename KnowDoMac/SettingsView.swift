@@ -8,6 +8,7 @@ struct SettingsView: View {
     @ObservedObject private var auth = SupabaseAuth.shared
     @AppStorage("showFloatingPanel") private var showFloatingPanel: Bool = true
     @AppStorage("idleGuardEnabled") private var idleGuardOn: Bool = true
+    @AppStorage(SoundPolicy.key) private var soundOn: Bool = false
     @State private var loginEnabled: Bool = false
     @State private var loginError: String? = nil
     @State private var emailInput: String = ""
@@ -30,6 +31,13 @@ struct SettingsView: View {
                 Section("守卫") {
                     Toggle("任务衔接守卫", isOn: $idleGuardOn)
                     Text("没有任务在计时、也不在带时长的暂停中时，全屏问你「接下来干什么？」。只存在本机，不进同步；关掉不影响暂停规则。")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+
+                Section("声音") {
+                    Toggle("允许 Mac 出声", isOn: $soundOn)
+                    Text("默认静默：时间到、暂停到点叫回、空档催促只亮屏、弹窗或发通知，不出声。打开后才会响铃。只存在本机，不进同步，不影响手机版的声音设置。")
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
                 }

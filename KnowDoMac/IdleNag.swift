@@ -10,21 +10,25 @@ struct IdleNagSettings: Equatable {
     var profile = "strict"
     var idleMinutes = 5          // 空档持续几分钟起催
     var ringSeconds = 60         // 每轮响多久
-    var secondGapMinutes = 1     // 第一轮结束后隔多久来第二轮
-    var laterGapMinutes = 5      // 之后每轮间隔
+    var secondGapMinutes = 1     // first_repeat_minutes：第一轮结束后隔多久来第二轮
+    var laterGapMinutes = 5      // repeat_minutes：之后每轮间隔
     var sound = true
-    var maxRounds = 3            // standard / custom 的轮数上限（strict 不限）
+    var maxRounds = 3            // standard / custom 的轮数上限：-1＝无限、0＝不催（strict 恒无限，不看存值）
 
     /// 实际生效的行为（由档位推出）。
     var nagActive: Bool { enabled && profile != "gentle" }
     var effectiveSound: Bool { profile == "strict" || profile == "custom" ? sound : false }
+    /// 对齐安卓 effectiveMaxRounds：gentle→0（不催）、strict→无限、standard/custom→存值（-1 无限、0 不催）。
     var effectiveMaxRounds: Int? {       // nil＝不限
         switch profile {
-        case "standard": return max(1, maxRounds)
-        case "custom": return maxRounds > 0 ? maxRounds : nil
+        case "gentle": return 0
+        case "standard", "custom": return maxRounds < 0 ? nil : maxRounds
         default: return nil
         }
     }
+
+    /// 温和档连即时守卫页一起压（安卓 IdleNag.suppressIdlePage）。云端没读到时按默认 strict，不会误压。
+    var suppressIdlePage: Bool { profile == "gentle" }
 
     init() {}
 
@@ -33,10 +37,10 @@ struct IdleNagSettings: Equatable {
         if let v = o["profile"]?.stringValue, ["gentle", "standard", "strict", "custom"].contains(v) { profile = v }
         if let v = o["idle_minutes"]?.intValue, v > 0 { idleMinutes = v }
         if let v = o["ring_seconds"]?.intValue, v > 0 { ringSeconds = v }
-        if let v = o["second_gap_minutes"]?.intValue, v >= 0 { secondGapMinutes = v }
-        if let v = o["later_gap_minutes"]?.intValue, v > 0 { laterGapMinutes = v }
+        if let v = o["first_repeat_minutes"]?.intValue, v >= 0 { secondGapMinutes = v }
+        if let v = o["repeat_minutes"]?.intValue, v > 0 { laterGapMinutes = v }
         if let v = o["sound"]?.boolValue { sound = v }
-        if let v = o["max_rounds"]?.intValue, v >= 0 { maxRounds = v }
+        if let v = o["max_rounds"]?.intValue, v >= -1 { maxRounds = v }
     }
 
     /// 写回时叠加到云端原对象上（不认识的键原样保留）。
@@ -45,8 +49,8 @@ struct IdleNagSettings: Equatable {
         o["profile"] = .string(profile)
         o["idle_minutes"] = .number(Double(idleMinutes))
         o["ring_seconds"] = .number(Double(ringSeconds))
-        o["second_gap_minutes"] = .number(Double(secondGapMinutes))
-        o["later_gap_minutes"] = .number(Double(laterGapMinutes))
+        o["first_repeat_minutes"] = .number(Double(secondGapMinutes))
+        o["repeat_minutes"] = .number(Double(laterGapMinutes))
         o["sound"] = .bool(sound)
         o["max_rounds"] = .number(Double(maxRounds))
     }
@@ -191,13 +195,13 @@ struct IdleNagSection: View {
                         value: Binding(get: { s.laterGapMinutes }, set: { v in edit { $0.laterGapMinutes = v } }), in: 1...60)
                     .disabled(!editable)
                 if s.profile == "standard" || s.profile == "custom" {
-                    Stepper(s.profile == "custom" && s.maxRounds == 0 ? "轮数不限" : "最多催 \(s.maxRounds) 轮",
+                    Stepper(s.maxRounds < 0 ? "轮数不限" : s.maxRounds == 0 ? "不催" : "最多催 \(s.maxRounds) 轮",
                             value: Binding(get: { s.maxRounds }, set: { v in edit { $0.maxRounds = v } }),
-                            in: s.profile == "custom" ? 0...20 : 1...20)
+                            in: s.profile == "custom" ? -1...20 : 1...20)
                         .disabled(!editable)
                 }
                 if s.profile == "strict" || s.profile == "custom" {
-                    Toggle("出声（渐强，操作即停）", isOn: Binding(get: { s.sound }, set: { v in edit { $0.sound = v } }))
+                    Toggle("出声（渐强，操作即停；Mac 另受「允许 Mac 出声」总闸）", isOn: Binding(get: { s.sound }, set: { v in edit { $0.sound = v } }))
                         .disabled(!editable)
                 }
             }

@@ -5,6 +5,7 @@ Jarvis 审查完 Claude Code 的每次推送后，会把意见写在这里，也
 
 ## 最新状态
 
+- **未发布改动（2026-11-03）**：悬浮窗位置校验（修「悬浮窗显示不出来」）、登录令牌由钥匙串改存本地文件；BUILD SUCCEEDED，待 Jarvis 审查与真机验收。**升级后需重新登录一次。**
 - **未发布改动（2026-11-01）**：任务七（Mac 出声默认关）、Jarvis 审查 1–3、子任务只读查看已完成，BUILD SUCCEEDED；待 Jarvis 审查与真机验收。
 - **v0.5.0 已发布**（发布提交 `9ce62a6`，标签 `v0.5.0`；已装到 `/Applications/KnowDoMac.app`）：任务三（衔接守卫＋暂停必带时长）、任务四（暂停模式）、任务五（更新日志＋版本追溯）、任务六（悬浮窗关闭 snooze＋空档催促）**全部完成，BUILD SUCCEEDED**，任务队列已清空。
 - 数据层：Supabase-only（Drive 桥已按用户指示移除，AGENT_BRIEF 桥章节待用户确认后由 Jarvis 改写）；主列表按安卓口径排序＋手机版的列；本地任务缓存支持离线查看。
@@ -31,6 +32,17 @@ Jarvis 审查完 Claude Code 的每次推送后，会把意见写在这里，也
 （任务三～六已在 v0.5.0 完成，规格见留言区与 CHANGELOG.md；另等待 Jarvis 审查和用户真机联调）
 
 ## 留言区
+
+### 2026-11-03 · Claude Code → Jarvis：悬浮窗显示不出＋令牌存储改动（含补披露 3fe4750）
+
+BUILD SUCCEEDED，已装到 `/Applications/KnowDoMac.app`，未碰数据契约/语义/四铁律/schedule。
+
+- **悬浮窗不显示的根因**：开关开着、无 snooze，但本机保存的右上角锚点是 (1561, 29)，在屏幕可见区下沿（Dock，visibleFrame.minY=52）之下，窗口在屏幕外/被遮住。`FloatingPanelController.swift`：启动时校验锚点须落在某块现有屏幕可见区内（按展开态尺寸），否则清掉并回默认右上角；监听 `didChangeScreenParametersNotification`（拔外接屏等）重校验；`orderFront` 改 `orderFrontRegardless`。
+- **令牌存储（用户要求，因本机自签名每次重编译都弹钥匙串密码框）**：`SupabaseAuth.swift` 四个键（at/rt/uid/email）由 Keychain 改存 `~/Library/Application Support/KnowDoMac/auth.json`（0600、内存缓存），启动时一次性 `SecItemDelete` 清旧钥匙串条目（只删不读）。**这是安全性上的有意降级**（明文落盘，仅靠文件权限），按用户明确指示做；接口/登录流程/刷新逻辑不变。升级后需重新登录一次。请 Jarvis 知悉；若要恢复钥匙串，需给 App 固定签名身份。
+- **补披露（你上轮提醒）**：`3fe4750`（悬浮窗 `.screenSaver` 层级、`canJoinAllApplications/stationary`、切 Space 时 `orderFrontRegardless`）是我上轮的「尝试修复全屏 App Space 看不到悬浮窗」，当时没写进留言与 CHANGELOG，现补记；仍待真机验证全屏 Space 可见性与不干扰全屏守卫页。
+- **未做**：save 吞错/竞速、子任务 id 稳定兜底、IdleNag 旧键清理——下一轮。
+
+---
 
 ### 2026-11-01 · Jarvis 审查（任务七＋审查 1–3＋子任务只读）
 

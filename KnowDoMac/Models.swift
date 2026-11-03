@@ -119,6 +119,25 @@ extension TaskItem {
     }
 }
 
+extension TaskItem {
+    /// 编辑子任务：按 id 复用原始对象（不认识的子字段原样保留），只改 title/minutes；空数组也写出，
+    /// 这样云端能被清空。有子任务时总时长＝各子任务分钟之和（安卓口径）。
+    mutating func setSubtasks(_ subs: [Subtask]) {
+        let old = Dictionary((extras["subtasks"]?.arrayValue ?? []).compactMap { v -> (String, [String: JSONValue])? in
+            guard case .object(let o) = v, let id = o["id"]?.stringValue else { return nil }
+            return (id, o)
+        }, uniquingKeysWith: { a, _ in a })
+        extras["subtasks"] = .array(subs.map { st in
+            var o = old[st.id] ?? [:]
+            o["id"] = .string(st.id)
+            o["title"] = .string(st.title)
+            o["minutes"] = .number(Double(st.minutes))
+            return .object(o)
+        })
+        if !subs.isEmpty { durationMinutes = max(1, subs.reduce(0) { $0 + $1.minutes }) }
+    }
+}
+
 // MARK: - 与桥 JSON 互转（经 JSONValue 手工组装，保证未知字段与 null 的写法与安卓一致）
 
 extension TaskItem {

@@ -172,7 +172,7 @@ struct SupabaseTaskRow: Codable {
     var deadline_time: String?      // 额外列，服务端没有时不带
     var actual_minutes: Int?
     private var withExtraCols = false
-    var subtasks: [JSONValue]?          // 只读：子任务列（有列才有值），本 App 永不写回
+    var subtasks: [JSONValue]?          // 子任务列：只有本地带有子任务数据时才写出（用户在 Mac 编辑过或云端读回的原样）
 
     private enum CodingKeys: String, CodingKey {
         case id, user_id, title, note, scenarios, deadline, `repeat`, duration_minutes, priority,
@@ -204,6 +204,7 @@ struct SupabaseTaskRow: Codable {
         updated_at = nil
         deadline_time = item.deadlineTime
         actual_minutes = item.actualMinutes
+        subtasks = item.extras["subtasks"]?.arrayValue   // 本地有子任务数据才写（含用户清空后的 []），没有就不碰云端列
         self.withExtraCols = withExtraCols
     }
 
@@ -264,6 +265,7 @@ struct SupabaseTaskRow: Codable {
         try c.encode(deleted, forKey: .deleted)
         try c.encode(next_start_at, forKey: .next_start_at)
         if let created_at { try c.encode(created_at, forKey: .created_at) }
+        if let subtasks { try c.encode(subtasks, forKey: .subtasks) }
         if withExtraCols {
             try c.encode(deadline_time, forKey: .deadline_time)
             try c.encode(actual_minutes ?? 0, forKey: .actual_minutes)

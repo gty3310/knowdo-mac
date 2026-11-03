@@ -15,6 +15,7 @@ struct TaskEditView: View {
     @State private var nextStartDate: Date
     @State private var customScenario: String = ""
     @State private var copied: Bool = false
+    @State private var newSubtaskTitle: String = ""
     private let isExisting: Bool
 
     static let presetScenarios = [
@@ -52,7 +53,7 @@ struct TaskEditView: View {
                 basicSection
                 timeSection
                 durationSection
-                if !draft.subtasks.isEmpty { subtasksSection }
+                subtasksSection
                 prioritySection
                 noteSection
                 focusSection
@@ -145,23 +146,48 @@ struct TaskEditView: View {
         }
     }
 
-    /// 只读：子任务在手机上编辑，Mac 先能看到；总时长由子任务分钟之和决定（安卓口径）。
+    /// 子任务可编辑：增删改标题/分钟；总时长＝分钟之和（安卓口径）。不做逐个计时。
     private var subtasksSection: some View {
         let subs = draft.subtasks
         return Section("子任务（\(subs.count) 个 · 共 \(subs.reduce(0) { $0 + $1.minutes }) 分钟）") {
             ForEach(Array(subs.enumerated()), id: \.element.id) { i, st in
                 HStack(spacing: 8) {
                     Text("\(i + 1).").foregroundColor(.secondary).monospacedDigit()
-                    Text(st.title.isEmpty ? "（未命名）" : st.title)
-                    Spacer()
-                    Text("\(st.minutes) 分").foregroundColor(.secondary).monospacedDigit()
+                    TextField("子任务名称", text: Binding(
+                        get: { st.title },
+                        set: { v in var a = draft.subtasks; if a.indices.contains(i) { a[i].title = v; draft.setSubtasks(a) } }))
+                    Stepper("\(st.minutes) 分", value: Binding(
+                        get: { st.minutes },
+                        set: { v in var a = draft.subtasks; if a.indices.contains(i) { a[i].minutes = v; draft.setSubtasks(a) } }),
+                            in: 1...600, step: 5)
+                        .monospacedDigit()
+                        .fixedSize()
+                    Button {
+                        var a = draft.subtasks; if a.indices.contains(i) { a.remove(at: i); draft.setSubtasks(a) }
+                    } label: { Image(systemName: "minus.circle") }
+                        .buttonStyle(.plain).foregroundColor(.secondary)
                 }
                 .font(.system(size: 13))
             }
-            Text("目前只能查看；增删改请在手机版里做，Mac 不会改动它们。")
+            HStack(spacing: 8) {
+                TextField("新子任务（回车添加，分钟默认 5）", text: $newSubtaskTitle)
+                    .onSubmit(addSubtask)
+                Button("添加", action: addSubtask)
+                    .disabled(newSubtaskTitle.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            Text("有子任务时，任务总时长自动等于各子任务分钟之和；点「保存」后同步到手机。")
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
         }
+    }
+
+    private func addSubtask() {
+        let t = newSubtaskTitle.trimmingCharacters(in: .whitespaces)
+        guard !t.isEmpty else { return }
+        var a = draft.subtasks
+        a.append(Subtask(id: UUID().uuidString.lowercased(), title: t, minutes: 5))
+        draft.setSubtasks(a)
+        newSubtaskTitle = ""
     }
 
     private var prioritySection: some View {

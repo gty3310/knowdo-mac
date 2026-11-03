@@ -115,10 +115,12 @@ final class FloatingPanelController: NSObject {
         host.onExit = { [weak self] in self?.mouseLeft() }
         p.contentView = host
 
-        if let saved = UserDefaults.standard.array(forKey: anchorKey) as? [Double], saved.count == 2 {
+        if let saved = UserDefaults.standard.array(forKey: anchorKey) as? [Double], saved.count == 2,
+           Self.anchorIsUsable(NSPoint(x: saved[0], y: saved[1])) {
             place(p, topRight: NSPoint(x: saved[0], y: saved[1]), size: Self.compactSize)
-        } else if let vf = NSScreen.main?.visibleFrame {
-            place(p, topRight: NSPoint(x: vf.maxX - 16, y: vf.maxY - 16), size: Self.compactSize)
+        } else {
+            UserDefaults.standard.removeObject(forKey: anchorKey)
+            resetToDefaultPosition(p)
         }
 
         let nc = NotificationCenter.default
@@ -132,6 +134,8 @@ final class FloatingPanelController: NSObject {
         NSWorkspace.shared.notificationCenter.addObserver(
             self, selector: #selector(activeSpaceChanged(_:)),
             name: NSWorkspace.activeSpaceDidChangeNotification, object: nil)
+        nc.addObserver(self, selector: #selector(screensChanged(_:)),
+                       name: NSApplication.didChangeScreenParametersNotification, object: nil)
         // 展开状态只有一个来源（PanelHoverState）：鼠标进出和面板上的「✕」都改它，尺寸跟着它走
         expandedSink = PanelHoverState.shared.$expanded
             .removeDuplicates()
@@ -178,6 +182,22 @@ final class FloatingPanelController: NSObject {
         resizing = false
     }
 
+    /// 保存的右上角锚点必须落在某块现有屏幕的可见区内，且胶囊/展开态都放得下；
+    /// 否则（拔了外接屏、拖到屏幕边缘外）窗口会跑到看不见的地方。
+    private static func anchorIsUsable(_ a: NSPoint) -> Bool {
+        let size = expandedSize
+        return NSScreen.screens.contains { s in
+            let vf = s.visibleFrame
+            return a.x - size.width >= vf.minX - 1 && a.x <= vf.maxX + 1
+                && a.y <= vf.maxY + 1 && a.y - size.height >= vf.minY - 1
+        }
+    }
+
+    private func resetToDefaultPosition(_ p: NSPanel) {
+        guard let vf = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame else { return }
+        place(p, topRight: NSPoint(x: vf.maxX - 16, y: vf.maxY - 16), size: Self.compactSize)
+    }
+
     private func place(_ p: NSPanel, topRight: NSPoint, size: NSSize) {
         p.setFrame(NSRect(x: topRight.x - size.width, y: topRight.y - size.height,
                           width: size.width, height: size.height), display: false)
@@ -195,6 +215,17 @@ final class FloatingPanelController: NSObject {
         p.orderFrontRegardless()
     }
 
+    @objc private func screensChanged(_ note: Notification) {
+        guard let p = panel else { return }
+        if !Self.anchorIsUsable(NSPoint(x: p.frame.maxX, y: p.frame.maxY)) {
+            resizing = true
+            resetToDefaultPosition(p)
+            resizing = false
+            UserDefaults.standard.removeObject(forKey: anchorKey)
+        }
+        if p.isVisible { p.orderFrontRegardless() }
+    }
+
     @objc private func visibilityChanged(_ note: Notification) {
         applyVisibility()
     }
@@ -204,7 +235,7 @@ final class FloatingPanelController: NSObject {
         if enabled && !snoozed {
             if panel?.isVisible != true {
                 PanelHoverState.shared.expanded = false
-                panel?.orderFront(nil)
+                panel?.orderFrontRegardless()
             }
         } else if panel?.isVisible == true {
             PanelHoverState.shared.expanded = false

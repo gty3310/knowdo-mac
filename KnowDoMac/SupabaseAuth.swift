@@ -105,29 +105,44 @@ final class SupabaseAuth: ObservableObject {
         case userEmail = "knowdo.sb.email"
     }
 
-    private func keychainSave(_ key: KeychainKey, _ value: String) {
-        let data = Data(value.utf8)
-        let q: [CFString: Any] = [kSecClass: kSecClassGenericPassword,
-                                  kSecAttrAccount: key.rawValue]
-        if SecItemUpdate(q as CFDictionary, [kSecValueData: data] as CFDictionary) == errSecItemNotFound {
-            SecItemAdd(q.merging([kSecValueData: data]) { $1 } as CFDictionary, nil)
-        }
+    // 不再用钥匙串：本机自签名每次重编译签名都变，系统会反复要登录密码。
+    // 改存 Application Support/KnowDoMac/auth.json（权限 0600，仅当前用户可读），内存里缓存。
+    private var store: [String: String] = SupabaseAuth.loadStore()
+
+    private static var storeURL: URL {
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("KnowDoMac", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("auth.json")
     }
 
-    private func keychainLoad(_ key: KeychainKey) -> String? {
-        let q: [CFString: Any] = [kSecClass: kSecClassGenericPassword,
-                                  kSecAttrAccount: key.rawValue,
-                                  kSecReturnData: true,
-                                  kSecMatchLimit: kSecMatchLimitOne]
-        var result: AnyObject?
-        guard SecItemCopyMatching(q as CFDictionary, &result) == errSecSuccess,
-              let d = result as? Data else { return nil }
-        return String(data: d, encoding: .utf8)
+    private static func loadStore() -> [String: String] {
+        // 一次性清掉旧版留在钥匙串里的条目（只删不读，不触发授权框）
+        for k in ["knowdo.sb.at", "knowdo.sb.rt", "knowdo.sb.uid", "knowdo.sb.email"] {
+            SecItemDelete([kSecClass: kSecClassGenericPassword, kSecAttrAccount: k] as CFDictionary)
+        }
+        guard let d = try? Data(contentsOf: storeURL),
+              let m = try? JSONDecoder().decode([String: String].self, from: d) else { return [:] }
+        return m
     }
+
+    private func persistStore() {
+        guard let d = try? JSONEncoder().encode(store) else { return }
+        let url = Self.storeURL
+        try? d.write(to: url, options: .atomic)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+    }
+
+    private func keychainSave(_ key: KeychainKey, _ value: String) {
+        store[key.rawValue] = value
+        persistStore()
+    }
+
+    private func keychainLoad(_ key: KeychainKey) -> String? { store[key.rawValue] }
 
     private func keychainDelete(_ key: KeychainKey) {
-        SecItemDelete([kSecClass: kSecClassGenericPassword,
-                       kSecAttrAccount: key.rawValue] as CFDictionary)
+        store[key.rawValue] = nil
+        persistStore()
     }
 }
 

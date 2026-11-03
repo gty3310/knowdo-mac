@@ -24,7 +24,8 @@ struct FloatingPanelView: View {
             RoundedRectangle(cornerRadius: expanded ? 18 : 15, style: .continuous)
                 .fill(Color.black.opacity(expanded ? 0.45 : 0.80))
             RoundedRectangle(cornerRadius: expanded ? 18 : 15, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
+                .strokeBorder(Color(red: 1.0, green: 0.27, blue: 0.22).opacity(expanded ? 0.85 : 1.0),
+                              lineWidth: expanded ? 2 : 2.5)   // 红色描边：深色/浅色背景上都能一眼找到
             if expanded && choosingClose {
                 closeChooser
             } else if expanded {

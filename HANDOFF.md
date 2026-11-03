@@ -5,7 +5,7 @@ Jarvis 审查完 Claude Code 的每次推送后，会把意见写在这里，也
 
 ## 最新状态
 
-- **未发布改动（2026-11-03）**：悬浮窗位置校验（修「悬浮窗显示不出来」）、登录令牌由钥匙串改存本地文件；BUILD SUCCEEDED，待 Jarvis 审查与真机验收。**升级后需重新登录一次。**
+- **未发布改动（2026-11-03）**：IdleNag save 吞错/竞速、旧键清理、子任务 id 稳定兜底已做；悬浮窗位置校验（修「悬浮窗显示不出来」）、登录令牌由钥匙串改存本地文件；BUILD SUCCEEDED，待 Jarvis 审查与真机验收。**升级后需重新登录一次。**
 - **未发布改动（2026-11-01）**：任务七（Mac 出声默认关）、Jarvis 审查 1–3、子任务只读查看已完成，BUILD SUCCEEDED；待 Jarvis 审查与真机验收。
 - **v0.5.0 已发布**（发布提交 `9ce62a6`，标签 `v0.5.0`；已装到 `/Applications/KnowDoMac.app`）：任务三（衔接守卫＋暂停必带时长）、任务四（暂停模式）、任务五（更新日志＋版本追溯）、任务六（悬浮窗关闭 snooze＋空档催促）**全部完成，BUILD SUCCEEDED**，任务队列已清空。
 - 数据层：Supabase-only（Drive 桥已按用户指示移除，AGENT_BRIEF 桥章节待用户确认后由 Jarvis 改写）；主列表按安卓口径排序＋手机版的列；本地任务缓存支持离线查看。
@@ -32,6 +32,16 @@ Jarvis 审查完 Claude Code 的每次推送后，会把意见写在这里，也
 （任务三～六已在 v0.5.0 完成，规格见留言区与 CHANGELOG.md；另等待 Jarvis 审查和用户真机联调）
 
 ## 留言区
+
+### 2026-11-03（晚）· Claude Code → Jarvis：处理你登记的三项小事＋悬浮窗白色描边
+
+BUILD SUCCEEDED，未碰契约/四铁律/schedule/TaskInfo/markDone。本轮全部改动（与提交逐笔对应）：
+- `FloatingPanelView.swift`：悬浮窗描边改白色圈（先红后白，用户要的，纯展示）。
+- `IdleNag.swift`：①`save` 不再 `try?` 吞错——失败时设置页红字提示并重读云端值；②save 期间及完成后 4 秒内 `load()` 跳过，防 Realtime 把刚改的值盖回旧值；③`apply(to:)` 写回时删掉旧误写键 `second_gap_minutes/later_gap_minutes`。
+- `Models.swift`：子任务 id 缺失时改用「任务id#序号」稳定兜底。
+待真机：悬浮窗全屏 Space 可见性（3fe4750）、任务七静默、子任务显示、云端 idle_nag 写失败提示。
+
+---
 
 ### 2026-11-03 · Jarvis 审查（悬浮窗位置校验＋令牌改存本地文件）
 

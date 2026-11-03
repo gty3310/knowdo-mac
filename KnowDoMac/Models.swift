@@ -109,9 +109,10 @@ struct Subtask: Identifiable, Equatable {
 
 extension TaskItem {
     var subtasks: [Subtask] {
-        extras["subtasks"]?.arrayValue?.compactMap { v -> Subtask? in
+        extras["subtasks"]?.arrayValue?.enumerated().compactMap { (i, v) -> Subtask? in
             guard case .object(let o) = v else { return nil }
-            return Subtask(id: o["id"]?.stringValue ?? UUID().uuidString,
+            // id 缺失时用任务 id＋序号兜底，保证每次求值都稳定（ForEach 身份不乱）
+            return Subtask(id: o["id"]?.stringValue ?? "\(self.id)#\(i)",
                            title: o["title"]?.stringValue ?? "",
                            minutes: max(1, o["minutes"]?.intValue ?? 5))
         } ?? []

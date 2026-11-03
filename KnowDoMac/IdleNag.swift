@@ -53,6 +53,9 @@ struct IdleNagSettings: Equatable {
         o["repeat_minutes"] = .number(Double(laterGapMinutes))
         o["sound"] = .bool(sound)
         o["max_rounds"] = .number(Double(maxRounds))
+        // Mac 早期版本误写的旧键名，安卓不读，写回时顺手清掉
+        o["second_gap_minutes"] = nil
+        o["later_gap_minutes"] = nil
     }
 }
 
@@ -65,9 +68,14 @@ final class IdleNagStore: ObservableObject {
     @Published private(set) var settings = IdleNagSettings()
     @Published private(set) var available = false
     @Published private(set) var note = "登录后读取云端设置"
+    @Published private(set) var saveError: String?
     private var raw: [String: JSONValue] = [:]
+    /// 刚保存后的一小段时间内不用 Realtime/轮询触发的 load() 覆盖本地值（避免旧值盖回刚改的值）
+    private var skipLoadUntil = Date.distantPast
+    private var pendingSaves = 0
 
     func load() async {
+        if pendingSaves > 0 || Date() < skipLoadUntil { return }
         guard SupabaseAuth.shared.isLoggedIn, let uid = SupabaseAuth.shared.userId else {
             available = false
             note = "登录后读取云端设置"
@@ -96,11 +104,23 @@ final class IdleNagStore: ObservableObject {
         var o = raw
         new.apply(to: &o)
         raw = o
+        pendingSaves += 1
+        saveError = nil
         Task {
             let row: [String: JSONValue] = ["user_id": .string(uid), "idle_nag": .object(o)]
-            guard let body = try? JSONValue.array([.object(row)]).jsonData() else { return }
-            _ = try? await SupabaseHTTP.shared.restUpsert(
-                path: "/rest/v1/user_state?on_conflict=user_id", body: body)
+            do {
+                let body = try JSONValue.array([.object(row)]).jsonData()
+                _ = try await SupabaseHTTP.shared.restUpsert(
+                    path: "/rest/v1/user_state?on_conflict=user_id", body: body)
+            } catch {
+                saveError = "保存到云端失败：\(error.localizedDescription)（稍后会重新读取云端值）"
+            }
+            pendingSaves -= 1
+            skipLoadUntil = Date().addingTimeInterval(pendingSaves > 0 ? 0 : 4)
+            if saveError != nil {
+                skipLoadUntil = .distantPast
+                await load()   // 写失败：以云端为准，不让界面显示一个没存上的值
+            }
         }
     }
 }
@@ -204,6 +224,9 @@ struct IdleNagSection: View {
                     Toggle("出声（渐强，操作即停；Mac 另受「允许 Mac 出声」总闸）", isOn: Binding(get: { s.sound }, set: { v in edit { $0.sound = v } }))
                         .disabled(!editable)
                 }
+            }
+            if let e = store.saveError {
+                Text(e).font(.system(size: 11)).foregroundColor(.red)
             }
             Text(store.note.isEmpty
                  ? "没有任务在计时、也不在带时长的暂停中，持续满设定时间，就全屏叫你并响铃，直到你开始一个任务。这份设置存在云端，和手机版共用。"

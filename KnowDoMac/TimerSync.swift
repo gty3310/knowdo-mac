@@ -83,7 +83,8 @@ final class TimerSync {
             updatedAt: int64("updated_at"),
             pauseReason: o["pause_reason"]?.stringValue,
             pauseEmoji: o["pause_emoji"]?.stringValue,
-            pauseSilent: { if case .bool(let b)? = o["pause_silent"] { return b }; return false }())
+            pauseSilent: { if case .bool(let b)? = o["pause_silent"] { return b }; return false }(),
+            pauseRemindAt: { let v = int64("pause_remind_at"); return v > 0 ? v : nil }())
         TimerEngine.shared.applyRemoteTimerState(st)
     }
 }

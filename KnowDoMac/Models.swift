@@ -16,6 +16,8 @@ struct TaskItem: Identifiable, Equatable {
     var status: String = "todo"        // todo / done（daily 任务用 doneDates 记每日完成）
     var autoStart: Bool = false        // 桥端置 true：App 发现后自动开始计时，随即回写 false
     var note: String = ""
+    var description: String = ""   // 任务说明，与笔记分开，给守卫判定用
+    var repeatWeekdays: [Int] = [] // ISO 1=周一 … 7=周日；仅 weekly 有意义
     // ---- 专注守卫（v0.1 只同步与编辑，不执行拦截）----
     var focusRule: String = ""
     var focusMode: String = "off"      // off / block / allow
@@ -34,7 +36,7 @@ struct TaskItem: Identifiable, Equatable {
     static let knownKeys: Set<String> = [
         "id", "title", "scenarios", "deadline", "deadlineTime", "nextStartAt",
         "repeat", "durationMinutes", "actualMinutes", "priority", "status",
-        "autoStart", "note", "focusRule", "focusMode", "blockedApps",
+        "autoStart", "note", "description", "repeatWeekdays", "focusRule", "focusMode", "blockedApps",
         "allowedApps", "primaryApp", "doneDates", "deleted",
         "createdAt", "updatedAt", "createdAtMs", "updatedAtMs",
     ]
@@ -173,6 +175,10 @@ extension TaskItem {
         status = str("status", "todo")
         autoStart = o["autoStart"]?.boolValue ?? false
         note = str("note")
+        description = str("description")
+        if let arr = o["repeatWeekdays"]?.arrayValue {
+            repeatWeekdays = arr.compactMap { $0.intValue }.filter { (1...7).contains($0) }
+        }
         focusRule = str("focusRule")
         focusMode = str("focusMode", "off")
         blockedApps = strArray("blockedApps")
@@ -205,6 +211,8 @@ extension TaskItem {
         o["status"] = .string(status)
         o["autoStart"] = .bool(autoStart)
         o["note"] = .string(note)
+        o["description"] = .string(description)
+        o["repeatWeekdays"] = .array(repeatWeekdays.map { .number(Double($0)) })
         o["focusRule"] = .string(focusRule)
         o["focusMode"] = .string(focusMode)
         o["blockedApps"] = .array(blockedApps.map { .string($0) })

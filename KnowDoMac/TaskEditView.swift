@@ -55,6 +55,7 @@ struct TaskEditView: View {
                 durationSection
                 subtasksSection
                 prioritySection
+                descriptionSection
                 noteSection
                 focusSection
             }
@@ -198,6 +199,16 @@ struct TaskEditView: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
+        }
+    }
+
+    private var descriptionSection: some View {
+        Section("任务说明") {
+            TextEditor(text: $draft.description)
+                .frame(height: 72)
+            Text("给守卫判定用的背景，与下面的笔记分开。")
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
         }
     }
 

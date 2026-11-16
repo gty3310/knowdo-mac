@@ -14,6 +14,8 @@ final class SupabaseBackend: SyncBackend {
 
     /// 服务端 tasks 表是否有 deadline_time / actual_minutes 两列（首次用到时探测，同安卓 hasExtraCols）。
     private var hasExtraCols: Bool?
+    private var hasDescriptionCol: Bool?
+    private var hasWeekdaysCol: Bool?
 
     // MARK: - SyncBackend 协议
 
@@ -31,7 +33,12 @@ final class SupabaseBackend: SyncBackend {
         let uid = await MainActor.run { SupabaseAuth.shared.userId }
         guard let uid else { throw AuthError.notLoggedIn }
         let extra = await extraColsAvailable()
-        let rows = data.tasks.map { SupabaseTaskRow(from: $0, userId: uid, withExtraCols: extra) }
+        let hasDesc = await descriptionColAvailable()
+        let hasWd = await weekdaysColAvailable()
+        let rows = data.tasks.map {
+            SupabaseTaskRow(from: $0, userId: uid, withExtraCols: extra,
+                            withDescription: hasDesc, withWeekdays: hasWd)
+        }
         let body = try JSONEncoder().encode(rows)
         _ = try await SupabaseHTTP.shared.restUpsert(path: "/rest/v1/tasks", body: body)
     }
@@ -52,6 +59,22 @@ final class SupabaseBackend: SyncBackend {
         let ok = (try? await SupabaseHTTP.shared.restGet(
             path: "/rest/v1/tasks?select=deadline_time,actual_minutes&limit=1")) != nil
         hasExtraCols = ok
+        return ok
+    }
+
+    private func descriptionColAvailable() async -> Bool {
+        if let known = hasDescriptionCol { return known }
+        let ok = (try? await SupabaseHTTP.shared.restGet(
+            path: "/rest/v1/tasks?select=description&limit=1")) != nil
+        hasDescriptionCol = ok
+        return ok
+    }
+
+    private func weekdaysColAvailable() async -> Bool {
+        if let known = hasWeekdaysCol { return known }
+        let ok = (try? await SupabaseHTTP.shared.restGet(
+            path: "/rest/v1/tasks?select=repeat_weekdays&limit=1")) != nil
+        hasWeekdaysCol = ok
         return ok
     }
 
@@ -173,14 +196,21 @@ struct SupabaseTaskRow: Codable {
     var actual_minutes: Int?
     private var withExtraCols = false
     var subtasks: [JSONValue]?          // 子任务列：只有本地带有子任务数据时才写出（用户在 Mac 编辑过或云端读回的原样）
+    var taskDescription: String?
+    var repeatWeekdays: String?
+    private var withDescription = false
+    private var withWeekdays = false
 
     private enum CodingKeys: String, CodingKey {
         case id, user_id, title, note, scenarios, deadline, `repeat`, duration_minutes, priority,
              status, auto_start, focus_rule, focus_mode, blocked_apps, allowed_apps, primary_app,
              done_dates, deleted, next_start_at, created_at, updated_at, deadline_time, actual_minutes, subtasks
+        case taskDescription = "description"
+        case repeatWeekdays = "repeat_weekdays"
     }
 
-    init(from item: TaskItem, userId: String, withExtraCols: Bool) {
+    init(from item: TaskItem, userId: String, withExtraCols: Bool,
+         withDescription: Bool = false, withWeekdays: Bool = false) {
         id = item.id
         user_id = userId
         title = item.title
@@ -206,6 +236,11 @@ struct SupabaseTaskRow: Codable {
         actual_minutes = item.actualMinutes
         subtasks = item.extras["subtasks"]?.arrayValue   // 本地有子任务数据才写（含用户清空后的 []），没有就不碰云端列
         self.withExtraCols = withExtraCols
+        taskDescription = item.description
+        repeatWeekdays = item.repeatWeekdays.isEmpty
+            ? "" : item.repeatWeekdays.map(String.init).joined(separator: ",")
+        self.withDescription = withDescription
+        self.withWeekdays = withWeekdays
     }
 
     init(from decoder: Decoder) throws {
@@ -236,11 +271,17 @@ struct SupabaseTaskRow: Codable {
         hasExtraKeys = c.contains(.deadline_time)
         hasSubtasksKey = c.contains(.subtasks)
         subtasks = try? c.decodeIfPresent([JSONValue].self, forKey: .subtasks)
+        hasDescriptionKey = c.contains(.taskDescription)
+        hasWeekdaysKey = c.contains(.repeatWeekdays)
+        taskDescription = try c.decodeIfPresent(String.self, forKey: .taskDescription)
+        repeatWeekdays = try c.decodeIfPresent(String.self, forKey: .repeatWeekdays)
     }
 
     /// 解码时该行是否带了额外列（没带就从本地保全）
     private var hasExtraKeys = false
     private var hasSubtasksKey = false
+    private var hasDescriptionKey = false
+    private var hasWeekdaysKey = false
 
     /// 显式写出 null：upsert 要靠 null 把云端的 deadline / next_start_at 等清掉。
     func encode(to encoder: Encoder) throws {
@@ -270,6 +311,9 @@ struct SupabaseTaskRow: Codable {
             try c.encode(deadline_time, forKey: .deadline_time)
             try c.encode(actual_minutes ?? 0, forKey: .actual_minutes)
         }
+        // 列尚未上线时不写出，避免整次 upsert 被 PostgREST 拒绝，也避免冲掉安卓写入的值
+        if withDescription { try c.encode(taskDescription ?? "", forKey: .taskDescription) }
+        if withWeekdays { try c.encode(repeatWeekdays ?? "", forKey: .repeatWeekdays) }
     }
 
     func toTaskItem(preserveFrom local: TaskItem?) -> TaskItem {
@@ -309,6 +353,23 @@ struct SupabaseTaskRow: Codable {
         if hasSubtasksKey {
             if let subs = subtasks, !subs.isEmpty { t.extras["subtasks"] = .array(subs) }
             else { t.extras.removeValue(forKey: "subtasks") }
+        }
+        if hasDescriptionKey {
+            t.description = taskDescription ?? ""
+            if t.description.isEmpty, let local, !local.description.isEmpty {
+                t.description = local.description
+            }
+        } else if let local {
+            t.description = local.description
+        }
+        if hasWeekdaysKey {
+            t.repeatWeekdays = (repeatWeekdays ?? "")
+                .split(separator: ",")
+                .compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
+                .filter { (1...7).contains($0) }
+            if t.repeatWeekdays.isEmpty, let local { t.repeatWeekdays = local.repeatWeekdays }
+        } else if let local {
+            t.repeatWeekdays = local.repeatWeekdays
         }
         return t
     }

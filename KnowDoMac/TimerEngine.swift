@@ -8,7 +8,7 @@ struct TimerSlot: Codable, Equatable {
     var accumulatedSeconds: Int
     var halfFired: Bool
     // ---- 暂停槽元数据（任务四：暂停带目的与到点叫回；旧数据缺省为 nil）----
-    var resumeAtMs: Int64? = nil      // 到点叫回的时刻；nil＝没设（远端镜像暂停、过半/到时/重启遗留）
+    var resumeAtMs: Int64? = nil      // 到点叫回的时刻；nil＝没设（过半/到时/重启遗留，或远端没带 pause_remind_at）
     var pauseReason: String? = nil    // 目的显示名（与安卓同口径）
     var pauseEmoji: String? = nil
     var pauseSilent: Bool? = nil      // 静音：到点只发系统通知
@@ -33,6 +33,7 @@ struct RemoteTimerState {
     var pauseReason: String? = nil
     var pauseEmoji: String? = nil
     var pauseSilent: Bool = false
+    var pauseRemindAt: Int64? = nil  // pause_remind_at，老端没有则为 nil
 }
 
 /// 计时引擎：全局最多一个计时中 + 一个暂停槽（与安卓 TimerState 语义一致）。
@@ -433,6 +434,8 @@ final class TimerEngine: ObservableObject {
             if let r = p.pauseReason { o["pause_reason"] = r }
             if let e = p.pauseEmoji, !e.isEmpty { o["pause_emoji"] = e }
             if p.pauseSilent == true { o["pause_silent"] = true }
+            // 叫回时刻（老端忽略）：对面可按点提醒，避免镜像暂停静默挂着
+            if let ra = p.resumeAtMs, ra > 0 { o["pause_remind_at"] = ra }
         }
         o["updated_by"] = myDeviceId()
         o["updated_at"] = nowMs()
@@ -500,7 +503,8 @@ final class TimerEngine: ObservableObject {
     private func mirrorPaused(_ st: RemoteTimerState, accumulated: Int) -> Bool {
         if running == nil, let p = paused, p.taskId == st.taskId,
            p.plannedSeconds == st.duration, abs(p.accumulatedSeconds - accumulated) < 2,
-           p.pauseReason == st.pauseReason, (p.pauseSilent ?? false) == st.pauseSilent {
+           p.pauseReason == st.pauseReason, (p.pauseSilent ?? false) == st.pauseSilent,
+           p.resumeAtMs == st.pauseRemindAt {
             return false
         }
         if running != nil { SessionStore.shared.close() }
@@ -511,7 +515,9 @@ final class TimerEngine: ObservableObject {
         slot.pauseReason = st.pauseReason
         slot.pauseEmoji = st.pauseEmoji
         slot.pauseSilent = st.pauseSilent ? true : nil
-        slot.remote = true      // 叫回由发起暂停的那台设备负责，本机只显示
+        slot.resumeAtMs = st.pauseRemindAt
+        // 若带了叫回时刻，本机 checkResumeCall 也会到点提醒，避免静默挂着（两端都可能响，可接受）
+        slot.remote = true
         paused = slot
         return true
     }
